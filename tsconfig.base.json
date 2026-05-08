@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "jsx": "preserve",
+    "baseUrl": ".",
+    "paths": {
+      "@workspace/ui": ["packages/ui/src/index.ts"],
+      "@workspace/ui/*": ["packages/ui/src/*"],
+      "@workspace/types": ["packages/types/src/index.ts"],
+      "@workspace/types/*": ["packages/types/src/*"],
+      "@workspace/widgets": ["packages/widgets/src/index.ts"],
+      "@workspace/widgets/*": ["packages/widgets/src/*"]
+    }
+  }
+}

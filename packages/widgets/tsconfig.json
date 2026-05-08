@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": "../..",
+    "paths": {
+      "@workspace/types": ["packages/types/dist/index.d.ts"],
+      "@workspace/types/*": ["packages/types/dist/*"]
+    },
+    "rootDir": "src",
+    "types": ["vitest/globals"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.test.ts"]
+}
