@@ -124,4 +124,9 @@ export {
   TooltipProvider,
   TooltipTrigger
 } from "./components/tooltip";
+export {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle
+} from "./components/resizable";
 export { cn } from "./lib/utils";

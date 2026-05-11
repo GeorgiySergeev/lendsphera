@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, Injectable } from "@nestjs/common";
+import { ConflictException, ForbiddenException, Injectable, Logger } from "@nestjs/common";
 import { AuditAction, LandingStatus, Prisma, Role, VersionStatus } from "@prisma/client";
 
 import { AuditService } from "../audit/audit.service";
@@ -22,6 +22,8 @@ import type {
 
 @Injectable()
 export class LandingsService {
+  private readonly logger = new Logger(LandingsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
@@ -322,35 +324,70 @@ export class LandingsService {
   }
 
   async lock(id: string, dto: LockLandingDto, user: AuthUser) {
-    const landing = await this.prisma.landing.findUniqueOrThrow({ where: { id } });
+    await this.prisma.landing.findUniqueOrThrow({ where: { id } });
     const now = new Date();
     const ttlSeconds = dto.ttlMinutes * 60;
+    const lockExpires = new Date(now.getTime() + ttlSeconds * 1000);
 
-    const redisLockAcquired = await this.redis.acquireLock(id, user.id, ttlSeconds);
+    // ============ ATTEMPT 1: Try to acquire a new lock (atomic SET NX EX) ============
+    const lockAcquired = await this.redis.acquireLock(id, user.id, ttlSeconds);
 
-    if (!redisLockAcquired) {
-      const currentOwner = await this.redis.getLockOwner(id);
-      if (currentOwner && currentOwner !== user.id) {
-        throw new ConflictException("Landing is locked by another user.");
+    if (lockAcquired) {
+      // Successfully acquired — persist lock state to Postgres.
+      try {
+        const updated = await this.prisma.landing.update({
+          where: { id },
+          data: {
+            lockedById: user.id,
+            lockedAt: now,
+            lockExpires
+          }
+        });
+
+        await this.audit.log(AuditAction.UPDATE, "Landing", id, user.id, {
+          diff: { action: "lock", ttlMinutes: dto.ttlMinutes, isNewAcquisition: true }
+        });
+
+        return updated;
+      } catch (dbError) {
+        // Rollback Redis lock if Postgres write fails to maintain consistency.
+        await this.redis.releaseLock(id, user.id);
+        throw dbError;
       }
     }
 
-    const lockExpires = new Date(now.getTime() + dto.ttlMinutes * 60_000);
+    // ============ ATTEMPT 2: Re-entrant lock — refresh if already owner ============
+    const currentOwner = await this.redis.getLockOwner(id);
 
-    const updated = await this.prisma.landing.update({
-      where: { id },
-      data: {
-        lockedById: user.id,
-        lockedAt: now,
-        lockExpires
+    if (currentOwner === user.id) {
+      // Atomic refresh via Lua — safe against the race condition where
+      // the lock expires and another user acquires it between GET and EXPIRE.
+      const refreshed = await this.redis.refreshLock(id, user.id, ttlSeconds);
+
+      if (refreshed) {
+        const updated = await this.prisma.landing.update({
+          where: { id },
+          data: { lockExpires }
+        });
+
+        await this.audit.log(AuditAction.UPDATE, "Landing", id, user.id, {
+          diff: { action: "lock_refreshed", ttlMinutes: dto.ttlMinutes }
+        });
+
+        return updated;
       }
-    });
 
-    await this.audit.log(AuditAction.UPDATE, "Landing", id, user.id, {
-      diff: { action: "lock", ttlMinutes: dto.ttlMinutes }
-    });
+      // Refresh failed: lock expired and was grabbed by someone else
+      // between getLockOwner() and refreshLock().
+      throw new ConflictException(
+        "Lock ownership changed during refresh. Please try again."
+      );
+    }
 
-    return updated;
+    // ============ DENY: Another user owns the lock ============
+    throw new ConflictException(
+      `Landing is locked by user ${currentOwner ?? "unknown"}. Try again later.`
+    );
   }
 
   async refreshLock(id: string, user: AuthUser) {
@@ -373,11 +410,9 @@ export class LandingsService {
 
   async unlock(id: string, user: AuthUser) {
     const landing = await this.prisma.landing.findUniqueOrThrow({ where: { id } });
-    const canUnlock =
-      !landing.lockedById ||
-      landing.lockedById === user.id ||
-      user.role === Role.ADMIN ||
-      user.role === Role.OWNER;
+    const isOwner = landing.lockedById === user.id;
+    const isPrivileged = user.role === Role.ADMIN || user.role === Role.OWNER;
+    const canUnlock = !landing.lockedById || isOwner || isPrivileged;
 
     if (!canUnlock) {
       throw new ForbiddenException(
@@ -385,8 +420,21 @@ export class LandingsService {
       );
     }
 
-    await this.redis.releaseLock(id, user.id);
+    // Atomic release via Lua — only deletes if the key value matches userId.
+    // For admin/owner force-unlock of another user's lock, the Lua script
+    // will return false (userId mismatch), but we still clear Postgres state.
+    const released = await this.redis.releaseLock(id, user.id);
 
+    if (!released && landing.lockedById && isPrivileged && !isOwner) {
+      // Privileged user force-unlocking another user's lock:
+      // release using the actual owner's ID for atomic correctness.
+      await this.redis.releaseLock(id, landing.lockedById);
+      this.logger.warn(
+        `Force-unlock by ${user.role} user=${user.id} for landing=${id} owned by ${landing.lockedById}`
+      );
+    }
+
+    // Clear Postgres lock state regardless of Redis result.
     const updated = await this.prisma.landing.update({
       where: { id },
       data: {
@@ -397,7 +445,7 @@ export class LandingsService {
     });
 
     await this.audit.log(AuditAction.UPDATE, "Landing", id, user.id, {
-      diff: { action: "unlock" }
+      diff: { action: "unlock", wasForced: isPrivileged && !isOwner }
     });
 
     return updated;

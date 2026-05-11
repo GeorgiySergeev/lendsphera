@@ -6,6 +6,8 @@ import {
   LogOut,
   Menu,
   Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
   Search,
   Settings,
   Sun,
@@ -46,7 +48,8 @@ import {
   SidebarMenuItem,
   Tooltip,
   TooltipContent,
-  TooltipTrigger
+  TooltipTrigger,
+  cn
 } from "@workspace/ui";
 
 import { useAuthStore } from "../../stores/auth-store";
@@ -54,13 +57,24 @@ import { dashboardNavItems } from "./navigation";
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
+  const [isCollapsed, setIsCollapsed] = React.useState(false);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="hidden lg:fixed lg:inset-y-0 lg:flex">
-        <DashboardSidebar />
+      <div 
+        className={cn(
+          "hidden lg:fixed lg:inset-y-0 lg:flex transition-all duration-300 z-40",
+          isCollapsed ? "w-16" : "w-64"
+        )}
+      >
+        <DashboardSidebar isCollapsed={isCollapsed} onToggleCollapse={() => setIsCollapsed(!isCollapsed)} />
       </div>
-      <div className="flex min-h-screen flex-col lg:pl-64">
+      <div 
+        className={cn(
+          "flex min-h-screen flex-col transition-all duration-300",
+          isCollapsed ? "lg:pl-16" : "lg:pl-64"
+        )}
+      >
         <DashboardTopBar onOpenMobileNav={() => setOpen(true)} />
         <main className="flex-1 px-4 py-5 sm:px-6 lg:px-8">
           <div className="w-full max-w-none">{children}</div>
@@ -84,29 +98,50 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function DashboardSidebar({ onNavigate }: { onNavigate?: () => void }) {
+function DashboardSidebar({ 
+  onNavigate,
+  isCollapsed = false,
+  onToggleCollapse
+}: { 
+  onNavigate?: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
+}) {
   const pathname = usePathname();
 
   return (
-    <Sidebar>
-      <SidebarHeader>
-        <Link
-          href="/"
-          onClick={onNavigate}
-          className="flex min-w-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">Landing Builder</p>
-            <p className="truncate text-xs text-sidebar-foreground/55">
-              Production workspace
-            </p>
-          </div>
-        </Link>
+    <Sidebar className={cn("transition-all duration-300", isCollapsed ? "w-16" : "w-64")}>
+      <SidebarHeader className="flex flex-row items-center justify-between min-h-16 px-2">
+        {!isCollapsed && (
+          <Link
+            href="/"
+            onClick={onNavigate}
+            className="flex min-w-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring px-2"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">Landing Builder</p>
+              <p className="truncate text-xs text-sidebar-foreground/55">
+                Production workspace
+              </p>
+            </div>
+          </Link>
+        )}
+        {onToggleCollapse && (
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={onToggleCollapse} 
+            className={cn("h-8 w-8 shrink-0", isCollapsed ? "mx-auto" : "ml-auto")}
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {isCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+          </Button>
+        )}
       </SidebarHeader>
       <Separator className="bg-sidebar-border" />
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+          {!isCollapsed && <SidebarGroupLabel>Workspace</SidebarGroupLabel>}
           <SidebarMenu>
             {dashboardNavItems.map((item) => {
               const Icon = item.icon;
@@ -116,39 +151,48 @@ function DashboardSidebar({ onNavigate }: { onNavigate?: () => void }) {
 
               return (
                 <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton asChild isActive={isActive}>
-                    <Link href={item.href} onClick={onNavigate}>
-                      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                      <span className="truncate">{item.title}</span>
-                      {item.badge ? (
-                        <SidebarMenuBadge>{item.badge}</SidebarMenuBadge>
-                      ) : null}
-                    </Link>
-                  </SidebarMenuButton>
+                  <Tooltip delayDuration={0}>
+                    <TooltipTrigger asChild>
+                      <SidebarMenuButton asChild isActive={isActive} className={cn(isCollapsed && "justify-center px-0")}>
+                        <Link href={item.href} onClick={onNavigate}>
+                          <Icon className={cn("shrink-0", isCollapsed ? "h-5 w-5" : "h-4 w-4")} aria-hidden="true" />
+                          {!isCollapsed && <span className="truncate">{item.title}</span>}
+                          {!isCollapsed && item.badge ? (
+                            <SidebarMenuBadge>{item.badge}</SidebarMenuBadge>
+                          ) : null}
+                        </Link>
+                      </SidebarMenuButton>
+                    </TooltipTrigger>
+                    {isCollapsed && <TooltipContent side="right">{item.title}</TooltipContent>}
+                  </Tooltip>
                 </SidebarMenuItem>
               );
             })}
           </SidebarMenu>
         </SidebarGroup>
-        <div className="rounded-md border border-sidebar-border bg-sidebar-accent/60 p-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-medium text-sidebar-foreground">API stage</p>
-            <Badge variant="secondary">Mocked</Badge>
+        {!isCollapsed && (
+          <div className="rounded-md border border-sidebar-border bg-sidebar-accent/60 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium text-sidebar-foreground">API stage</p>
+              <Badge variant="secondary">Mocked</Badge>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-sidebar-foreground/65">
+              Query keys and token transport are ready for the next backend pass.
+            </p>
           </div>
-          <p className="mt-2 text-xs leading-5 text-sidebar-foreground/65">
-            Query keys and token transport are ready for the next backend pass.
-          </p>
-        </div>
+        )}
       </SidebarContent>
       <SidebarFooter>
-        <div className="flex items-center gap-3 rounded-md px-2 py-2">
-          <Avatar className="h-9 w-9">
+        <div className={cn("flex items-center rounded-md px-2 py-2", isCollapsed ? "justify-center" : "gap-3")}>
+          <Avatar className={cn("shrink-0", isCollapsed ? "h-8 w-8" : "h-9 w-9")}>
             <AvatarFallback>AD</AvatarFallback>
           </Avatar>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium">Admin Desk</p>
-            <p className="truncate text-xs text-sidebar-foreground/55">Owner workspace</p>
-          </div>
+          {!isCollapsed && (
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">Admin Desk</p>
+              <p className="truncate text-xs text-sidebar-foreground/55">Owner workspace</p>
+            </div>
+          )}
         </div>
       </SidebarFooter>
     </Sidebar>
@@ -237,7 +281,6 @@ function ThemeToggle() {
 }
 
 function UserMenu() {
-  const clearSession = useAuthStore((state) => state.clearSession);
   const user = useAuthStore((state) => state.user);
   const initials = user?.name
     ? user.name
@@ -247,6 +290,11 @@ function UserMenu() {
         .slice(0, 2)
         .toUpperCase()
     : "AD";
+
+  const handleLogout = React.useCallback(async () => {
+    const { logout } = await import("../../lib/api/auth");
+    await logout();
+  }, []);
 
   return (
     <DropdownMenu>
@@ -283,7 +331,7 @@ function UserMenu() {
           Settings
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onClick={clearSession}>
+        <DropdownMenuItem variant="destructive" onClick={handleLogout}>
           <LogOut className="h-4 w-4" aria-hidden="true" />
           Sign out
         </DropdownMenuItem>

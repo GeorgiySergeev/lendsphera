@@ -26,7 +26,9 @@ export default [
         projectService: {
           allowDefaultProject: [
             "packages/widgets/scripts/*.ts",
-            "packages/widgets/vite.config.ts"
+            "packages/widgets/vite.config.ts",
+            "tests/e2e/*.ts",
+            "apps/api/scripts/*.ts"
           ]
         },
         tsconfigRootDir: import.meta.dirname
@@ -46,6 +48,15 @@ export default [
       "@typescript-eslint/no-explicit-any": "warn",
       "no-undef": "off",
       "no-console": ["warn", { allow: ["warn", "error"] }]
+    }
+  },
+  {
+    files: ["**/*.{js,cjs,mjs}"],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.node
+      }
     }
   },
   {

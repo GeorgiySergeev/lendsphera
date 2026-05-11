@@ -24,7 +24,7 @@
       "prettier --write"
     ],
     "*.{js,jsx,ts,tsx,mjs,cjs}": [
-      "eslint --fix"
+      "eslint --fix --no-warn-ignored"
     ]
   },
   "devDependencies": {

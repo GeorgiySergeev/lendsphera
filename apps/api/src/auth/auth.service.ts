@@ -1,6 +1,6 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
-import type { Role } from "@prisma/client";
-import { compare } from "bcryptjs";
+import { ConflictException, Injectable, UnauthorizedException } from "@nestjs/common";
+import type { OAuthProvider, Role } from "@prisma/client";
+import { compare, hash } from "bcryptjs";
 
 import { PrismaService } from "../prisma/prisma.service";
 import { TokensService } from "./tokens.service";
@@ -68,6 +68,103 @@ export class AuthService {
     return { success: true };
   }
 
+  async register(
+    dto: { email: string; password: string; name: string },
+    meta: { userAgent?: string; ip?: string }
+  ) {
+    const existing = await this.prisma.user.findFirst({
+      where: { email: dto.email, deletedAt: null },
+    });
+
+    if (existing) {
+      throw new ConflictException("Email already in use");
+    }
+
+    const passwordHash = await hash(dto.password, 10);
+
+    const user = await this.prisma.user.create({
+      data: {
+        email: dto.email,
+        name: dto.name,
+        passwordHash,
+        role: "EDITOR",
+        isActive: true,
+        emailVerified: null,
+      },
+    });
+
+    return this.issueTokenPair(user, meta);
+  }
+
+  async upsertOAuthUser(input: {
+    provider: OAuthProvider;
+    providerAccountId: string;
+    email: string;
+    name: string | null;
+    avatarUrl: string | null;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      const existingAccount = await tx.oAuthAccount.findUnique({
+        where: {
+          provider_providerAccountId: {
+            provider: input.provider,
+            providerAccountId: input.providerAccountId,
+          },
+        },
+        include: { user: true },
+      });
+
+      if (existingAccount) {
+        await tx.user.update({
+          where: { id: existingAccount.userId },
+          data: { lastLoginAt: new Date() },
+        });
+        return existingAccount.user;
+      }
+
+      let user = await tx.user.findFirst({
+        where: { email: input.email, deletedAt: null },
+      });
+
+      if (user) {
+        await tx.oAuthAccount.create({
+          data: {
+            provider: input.provider,
+            providerAccountId: input.providerAccountId,
+            email: input.email,
+            userId: user.id,
+          },
+        });
+        await tx.user.update({
+          where: { id: user.id },
+          data: { lastLoginAt: new Date() },
+        });
+      } else {
+        user = await tx.user.create({
+          data: {
+            email: input.email,
+            name: input.name,
+            avatarUrl: input.avatarUrl,
+            passwordHash: null,
+            role: "EDITOR",
+            isActive: true,
+            emailVerified: new Date(),
+            lastLoginAt: new Date(),
+            oauthAccounts: {
+              create: {
+                provider: input.provider,
+                providerAccountId: input.providerAccountId,
+                email: input.email,
+              },
+            },
+          },
+        });
+      }
+
+      return user;
+    });
+  }
+
   async me(userId: string) {
     return this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
@@ -85,7 +182,7 @@ export class AuthService {
     });
   }
 
-  private async issueTokenPair(
+  async issueTokenPair(
     user: { id: string; email: string; role: Role },
     meta: { userAgent?: string; ip?: string }
   ) {

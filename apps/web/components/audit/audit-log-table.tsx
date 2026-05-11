@@ -31,6 +31,7 @@ import * as React from "react";
 import {
   fetchAuditLogs,
   fetchLandingAuditLogs,
+  type AuditAction,
   type AuditLogEntry
 } from "../../lib/api/audit";
 
@@ -72,6 +73,24 @@ const filterParsers = {
   action: parseAsString.withDefault("")
 };
 
+const auditActions = new Set<AuditAction>([
+  "CREATE",
+  "UPDATE",
+  "DELETE",
+  "RESTORE",
+  "PUBLISH",
+  "UNPUBLISH",
+  "DUPLICATE",
+  "LOGIN",
+  "LOGOUT",
+  "IMPORT",
+  "EXPORT"
+]);
+
+function toAuditAction(value: string): AuditAction | undefined {
+  return auditActions.has(value as AuditAction) ? (value as AuditAction) : undefined;
+}
+
 export function AuditLogTable({ landingId }: AuditLogTableProps) {
   const [filters, setFilters] = useQueryStates(filterParsers);
 
@@ -84,12 +103,12 @@ export function AuditLogTable({ landingId }: AuditLogTableProps) {
         ? fetchLandingAuditLogs(landingId, {
             page: filters.page,
             limit: filters.limit,
-            action: filters.action || undefined
+            action: toAuditAction(filters.action)
           })
         : fetchAuditLogs({
             page: filters.page,
             limit: filters.limit,
-            action: filters.action || undefined
+            action: toAuditAction(filters.action)
           })
   });
 
@@ -214,7 +233,7 @@ function AuditLogRow({ entry }: { entry: AuditLogEntry }) {
         )}
       </TableCell>
       <TableCell>
-        {entry.diff && (
+        {entry.diff !== null && entry.diff !== undefined && (
           <pre className="max-w-xs overflow-hidden text-ellipsis text-xs text-muted-foreground">
             {JSON.stringify(entry.diff, null, 2).slice(0, 100)}
           </pre>

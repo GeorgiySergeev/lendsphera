@@ -1,7 +1,9 @@
 import { defineConfig } from "prisma/config";
 
-process.env.DATABASE_URL ??=
-  "postgresql://postgres:postgres@localhost:5432/landing_builder?schema=public";
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL =
+    "postgresql://postgres:postgres@localhost:5432/landing_builder?schema=public";
+}
 
 export default defineConfig({
   schema: "prisma/schema.prisma",

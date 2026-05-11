@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { LandingsService } from "./landings.service";
 
 function createService(prisma: Record<string, unknown>) {
-  return new LandingsService(prisma as never);
+  return new LandingsService(prisma as never, {} as never, {} as never);
 }
 
 describe("LandingsService", () => {

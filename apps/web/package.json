@@ -57,6 +57,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17",
+    "@types/js-beautify": "^1.14.3",
     "@types/papaparse": "^5.5.2",
     "tailwindcss": "^4.1.17"
   }

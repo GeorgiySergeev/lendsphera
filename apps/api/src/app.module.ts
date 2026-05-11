@@ -1,9 +1,12 @@
 import { Module } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
+import { ThrottlerModule, seconds } from "@nestjs/throttler";
 
 import { AssetsModule } from "./assets/assets.module";
 import { AuditModule } from "./audit/audit.module";
 import { AuthModule } from "./auth/auth.module";
 import { CategoriesModule } from "./categories/categories.module";
+import { ComponentsModule } from "./components/components.module";
 import { GeosModule } from "./geos/geos.module";
 import { HealthController } from "./health/health.controller";
 import { LandingsModule } from "./landings/landings.module";
@@ -17,9 +20,27 @@ import { BullModule } from "@nestjs/bullmq";
 import { env } from "./config/env";
 import { PublishModule } from "./publish/publish.module";
 import { WidgetsModule } from "./widgets/widgets.module";
+import { CustomThrottlerGuard } from "./common/custom-throttler.guard";
 
 @Module({
   imports: [
+    ThrottlerModule.forRoot([
+      {
+        name: "global",
+        ttl: seconds(process.env.NODE_ENV === "production" ? 60 : 1000),
+        limit: process.env.NODE_ENV === "production" ? 100 : 10000
+      },
+      {
+        name: "auth",
+        ttl: seconds(60),
+        limit: process.env.NODE_ENV === "production" ? 5 : 100
+      },
+      {
+        name: "password-reset",
+        ttl: seconds(3600),
+        limit: process.env.NODE_ENV === "production" ? 3 : 100
+      }
+    ]),
     BullModule.forRoot({
       connection: {
         url: env.REDIS_URL
@@ -31,6 +52,7 @@ import { WidgetsModule } from "./widgets/widgets.module";
     AuthModule,
     GeosModule,
     CategoriesModule,
+    ComponentsModule,
     VariantsModule,
     TemplatesModule,
     LandingsModule,
@@ -40,6 +62,12 @@ import { WidgetsModule } from "./widgets/widgets.module";
     LegacyModule,
     PublishModule
   ],
-  controllers: [HealthController]
+  controllers: [HealthController],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: CustomThrottlerGuard
+    }
+  ]
 })
 export class AppModule {}

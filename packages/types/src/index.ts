@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export * from "./components";
+
 export const WidgetSchema = z.object({
   id: z.string().min(1),
   type: z.enum(["hero", "features", "cta"]),

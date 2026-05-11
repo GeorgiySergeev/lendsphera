@@ -5,6 +5,8 @@ import { Job } from "bullmq";
 import { minify } from "html-minifier-terser";
 import { transform } from "lightningcss";
 import postcss from "postcss";
+import type { AcceptedPlugin } from "postcss";
+// @ts-expect-error: no types available for tailwindcss
 import tailwindcss from "tailwindcss";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
@@ -65,8 +67,11 @@ export class PublishProcessor extends WorkerHost {
       let html = version.html || "";
 
       log("Compiling Tailwind CSS...");
+      const tailwindPlugin = tailwindcss as unknown as (
+        options: Record<string, unknown>
+      ) => AcceptedPlugin;
       const tailwindProcessor = postcss([
-        tailwindcss({
+        tailwindPlugin({
           content: [{ raw: html, extension: "html" }],
           theme: { extend: {} },
           corePlugins: { preflight: true }

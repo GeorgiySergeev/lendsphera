@@ -4,6 +4,8 @@ import type { Editor } from "grapesjs";
 import * as React from "react";
 
 import type { LandingEditorDocument } from "../../lib/api/landings";
+import { componentsApi } from "../../lib/api/components";
+import { toast } from "../../lib/toast";
 
 type Device = "mobile" | "tablet" | "desktop";
 
@@ -16,6 +18,12 @@ type GrapesCanvasProps = {
 function GrapesCanvas({ device, document, onEditorReady }: GrapesCanvasProps) {
   const containerId = React.useId().replaceAll(":", "");
   const initializedRef = React.useRef(false);
+  const documentRef = React.useRef(document);
+  documentRef.current = document;
+  const onEditorReadyRef = React.useRef(onEditorReady);
+  onEditorReadyRef.current = onEditorReady;
+  const deviceRef = React.useRef(device);
+  deviceRef.current = device;
 
   React.useEffect(() => {
     let editor: Editor | null = null;
@@ -37,6 +45,9 @@ function GrapesCanvas({ device, document, onEditorReady }: GrapesCanvasProps) {
       }
 
       initializedRef.current = true;
+
+      const doc = documentRef.current;
+
       editor = grapesjs.init({
         assetManager: {
           appendTo: "#gjs-assets"
@@ -77,26 +88,100 @@ function GrapesCanvas({ device, document, onEditorReady }: GrapesCanvasProps) {
         width: "100%"
       });
 
-      if (document?.components) {
-        editor.setComponents(document.components);
-      } else if (document?.html) {
-        editor.setComponents(document.html);
+      if (doc?.components) {
+        editor.setComponents(doc.components);
+      } else if (doc?.html) {
+        editor.setComponents(doc.html);
       } else {
         editor.setComponents(defaultLandingMarkup);
       }
 
-      if (document?.styles) {
-        editor.setStyle(document.styles);
-      } else if (document?.css) {
-        editor.setStyle(document.css);
+      if (doc?.styles) {
+        editor.setStyle(doc.styles);
+      } else if (doc?.css) {
+        editor.setStyle(doc.css);
       }
 
-      if (document?.assets?.length) {
-        editor.AssetManager.add(document.assets);
+      if (doc?.assets?.length) {
+        editor.AssetManager.add(doc.assets);
       }
 
-      editor.setDevice(device);
-      onEditorReady(editor);
+      editor.setDevice(deviceRef.current);
+      onEditorReadyRef.current(editor);
+      
+      const iframeDoc = (editor as any).Canvas?.getDocument?.();
+      if (iframeDoc) {
+        iframeDoc.addEventListener("dragover", (e: DragEvent) => {
+          e.preventDefault();
+          if (e.dataTransfer) {
+            e.dataTransfer.dropEffect = "copy";
+          }
+          iframeDoc.body.style.outline = "2px dashed hsl(var(--primary))";
+        });
+
+        iframeDoc.addEventListener("dragleave", () => {
+          iframeDoc.body.style.outline = "";
+        });
+
+        iframeDoc.addEventListener("drop", (e: DragEvent) => {
+          iframeDoc.body.style.outline = "";
+          try {
+            const dataStr = e.dataTransfer?.getData("text/plain");
+            if (dataStr) {
+              const data = JSON.parse(dataStr);
+              if (data.type === "affly-component" && editor) {
+                (editor as any).addComponents(data.html);
+                if (data.css) {
+                  (editor as any).Css.addRules(data.css);
+                }
+                
+                componentsApi.trackUsage(data.componentId).catch(() => {});
+                toast.success(`"${data.name}" added to canvas`);
+                
+                // Fetch full details for potential CSS
+                if (!data.css) {
+                  componentsApi.get(data.componentId).then(detail => {
+                    if (detail.css && editor) {
+                      (editor as any).Css.addRules(detail.css);
+                    }
+                  }).catch(() => {});
+                }
+              }
+            }
+          } catch {
+            // Ignore parse errors
+          }
+        });
+      }
+
+      editor.on('block:drag:stop', (droppedComponent, block: any) => {
+        if (block) {
+          const blockId = block.getId();
+          if (blockId.startsWith('affly-')) {
+             const compId = blockId.replace('affly-', '');
+             componentsApi.trackUsage(compId).catch(() => {});
+             
+             componentsApi.get(compId).then(detail => {
+               if (detail.css && editor) {
+                 (editor as any).Css.addRules(detail.css);
+               }
+             }).catch(() => {});
+          }
+        }
+      });
+
+      try {
+        const response = await componentsApi.list({ limit: 100, isPublic: true });
+        response.data.forEach(comp => {
+          (editor as any)?.Blocks.add(`affly-${comp.id}`, {
+            category: comp.category.name,
+            content: comp.html,
+            label: comp.name
+          });
+        });
+      } catch {
+        // Ignore API failures for blocks
+      }
     }
 
     void initEditor();
@@ -106,7 +191,8 @@ function GrapesCanvas({ device, document, onEditorReady }: GrapesCanvasProps) {
       editor?.destroy();
       initializedRef.current = false;
     };
-  }, [containerId, document, onEditorReady]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [containerId]);
 
   return (
     <div

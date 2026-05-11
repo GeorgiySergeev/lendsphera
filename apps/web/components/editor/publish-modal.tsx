@@ -11,8 +11,7 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
-  Progress
+  DialogTitle
 } from "@workspace/ui";
 
 import { buildPreview, getPublishJob, publishLandingDraft } from "../../lib/api/landings";
@@ -132,7 +131,9 @@ export function PublishModal({
                       network.
                     </p>
                   </div>
-                  <Progress value={undefined} className="w-full max-w-md" />
+                  <div className="h-2 w-full max-w-md overflow-hidden rounded-full bg-muted">
+                    <div className="h-full w-1/2 animate-pulse rounded-full bg-primary" />
+                  </div>
                 </>
               )}
               {isComplete && (

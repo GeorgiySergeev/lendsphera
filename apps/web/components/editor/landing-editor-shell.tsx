@@ -14,6 +14,7 @@ import {
   ChevronDown,
   Code2,
   Eye,
+  LayoutGrid,
   Layers3,
   Monitor,
   Paintbrush,
@@ -39,9 +40,16 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
   ScrollArea,
   Separator,
   Skeleton,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
   cn
 } from "@workspace/ui";
 
@@ -69,6 +77,7 @@ import { LandingCodePanel } from "./landing-code-panel";
 import { PlaceholderContentPanel } from "./placeholder-content-panel";
 import { WidgetConfigPanel } from "./widget-config-panel";
 import { PublishModal } from "./publish-modal";
+import { ComponentsPanel } from "./components-panel";
 
 type Device = "mobile" | "tablet" | "desktop";
 
@@ -101,6 +110,7 @@ const devices: {
 ];
 
 const leftTabs = [
+  { id: "components", label: "Components", icon: LayoutGrid },
   { id: "blocks", label: "Blocks", icon: PanelLeft },
   { id: "layers", label: "Layers", icon: Layers3 },
   { id: "assets", label: "Assets", icon: Upload }
@@ -113,8 +123,17 @@ const rightTabs = [
   { id: "code", label: "Code", icon: Code2 }
 ] as const;
 
+type GrapesEditor = Editor & {
+  AssetManager: any;
+  Css: any;
+  Blocks: any;
+  runCommand: (command: string) => unknown;
+  select: (component: unknown) => unknown;
+  getSelected: () => any;
+};
+
 function LandingEditorShell({ landingId }: LandingEditorShellProps) {
-  const editorRef = React.useRef<Editor | null>(null);
+  const editorRef = React.useRef<GrapesEditor | null>(null);
   const lastSavedRef = React.useRef<string>("");
   const placeholderRenderRef = React.useRef(false);
   const customCssRenderRef = React.useRef(false);
@@ -212,6 +231,9 @@ function LandingEditorShell({ landingId }: LandingEditorShellProps) {
     window.localStorage.setItem(deviceStorageKey, device);
   }, [device]);
 
+  const lockStatusRef = React.useRef(lockStatus);
+  lockStatusRef.current = lockStatus;
+
   React.useEffect(() => {
     let heartbeatInterval: NodeJS.Timeout | null = null;
 
@@ -225,7 +247,7 @@ function LandingEditorShell({ landingId }: LandingEditorShellProps) {
         heartbeatInterval = setInterval(async () => {
           try {
             await refreshLandingLock(landingId);
-          } catch (error) {
+          } catch {
             setLockStatus("lost");
             toast.error("Lock lost", "Another user may have taken control");
             if (heartbeatInterval) {
@@ -233,7 +255,7 @@ function LandingEditorShell({ landingId }: LandingEditorShellProps) {
             }
           }
         }, 30000);
-      } catch (error) {
+      } catch {
         setLockStatus("error");
         toast.error("Could not acquire lock", "Another user may be editing");
       }
@@ -242,7 +264,7 @@ function LandingEditorShell({ landingId }: LandingEditorShellProps) {
     void acquireLock();
 
     const handleBeforeUnload = () => {
-      if (lockStatus === "locked") {
+      if (lockStatusRef.current === "locked") {
         void releaseLandingLock(landingId);
       }
     };
@@ -254,17 +276,22 @@ function LandingEditorShell({ landingId }: LandingEditorShellProps) {
         clearInterval(heartbeatInterval);
       }
       window.removeEventListener("beforeunload", handleBeforeUnload);
-      if (lockStatus === "locked") {
+      if (lockStatusRef.current === "locked") {
         void releaseLandingLock(landingId);
       }
     };
-  }, [landingId, lockStatus]);
+  }, [landingId]);
+
+  const documentDataLoadedRef = React.useRef(false);
+  const documentDataRef = React.useRef(documentQuery.data);
+  documentDataRef.current = documentQuery.data;
 
   React.useEffect(() => {
-    if (!documentQuery.data) {
+    if (!documentQuery.data || documentDataLoadedRef.current) {
       return;
     }
 
+    documentDataLoadedRef.current = true;
     setCustomCss(documentQuery.data.customCss ?? "");
     setPlaceholderValues(
       buildInitialPlaceholderValues(
@@ -272,7 +299,8 @@ function LandingEditorShell({ landingId }: LandingEditorShellProps) {
         documentQuery.data.placeholderValues
       )
     );
-  }, [documentQuery.data, placeholderSchema]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentQuery.data]);
 
   React.useEffect(() => {
     const editor = editorRef.current;
@@ -353,6 +381,15 @@ function LandingEditorShell({ landingId }: LandingEditorShellProps) {
     return () => window.clearInterval(interval);
   }, [draftMutate, isDraftPending, serializeEditor]);
 
+  const handleManualSave = React.useCallback(() => {
+    const payload = serializeEditor();
+
+    if (payload) {
+      lastSavedRef.current = JSON.stringify(payload);
+      draftMutate(payload);
+    }
+  }, [serializeEditor, draftMutate]);
+
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
@@ -410,7 +447,7 @@ function LandingEditorShell({ landingId }: LandingEditorShellProps) {
 
   const handleEditorReady = React.useCallback(
     (editor: Editor) => {
-      editorRef.current = editor;
+      editorRef.current = editor as GrapesEditor;
       syncCodeSnapshot();
       editor.on("update", () => {
         if (placeholderRenderRef.current || customCssRenderRef.current) {
@@ -435,14 +472,6 @@ function LandingEditorShell({ landingId }: LandingEditorShellProps) {
     editorRef.current?.setDevice(nextDevice);
   };
 
-  const handleManualSave = () => {
-    const payload = serializeEditor();
-
-    if (payload) {
-      lastSavedRef.current = JSON.stringify(payload);
-      draftMutate(payload);
-    }
-  };
   const handlePlaceholderChange = (key: string, value: PlaceholderValue[string]) => {
     setPlaceholderValues((current) => ({ ...current, [key]: value }));
     setSaveStatus((current) => (current === "saving" ? current : "dirty"));
@@ -485,73 +514,100 @@ function LandingEditorShell({ landingId }: LandingEditorShellProps) {
         title={title}
         versions={versionsQuery.data?.length ?? 0}
       />
-      <div className="grid min-h-0 flex-1 grid-cols-1 bg-muted/30 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
-        <EditorPanel
-          tabs={leftTabs}
-          activeTab={activeLeftTab}
-          onTabChange={setActiveLeftTab}
-          side="left"
+      <ResizablePanelGroup
+        direction="horizontal"
+        className="min-h-0 flex-1 bg-muted/30"
+      >
+        <ResizablePanel
+          defaultSize={18}
+          minSize={12}
+          maxSize={35}
+          className="hidden lg:flex"
         >
-          <div className={cn(activeLeftTab !== "blocks" && "hidden")} id="gjs-blocks" />
-          <div className={cn(activeLeftTab !== "layers" && "hidden")} id="gjs-layers" />
-          <div className={cn(activeLeftTab !== "assets" && "hidden")} id="gjs-assets" />
-          {documentQuery.isLoading ? <Skeleton className="mt-4 h-24 w-full" /> : null}
-        </EditorPanel>
-        <main className="min-h-[680px] min-w-0 overflow-x-auto border-y bg-muted/40 p-4 lg:border-x lg:border-y-0">
-          <Card className="flex h-full justify-center overflow-hidden border-dashed bg-background/95">
-            <CardContent className="h-full p-0">
-              <motion.div
-                animate={{ width: devicePreviewWidths[device] }}
-                className="h-full max-w-full overflow-hidden"
-                initial={false}
-                transition={{ duration: 0.28, ease: "easeInOut" }}
-              >
-                <GrapesCanvas
-                  device={device}
-                  document={documentQuery.data}
-                  onEditorReady={handleEditorReady}
-                />
-              </motion.div>
-            </CardContent>
-          </Card>
-        </main>
-        <EditorPanel
-          tabs={rightTabs}
-          activeTab={activeRightTab}
-          onTabChange={setActiveRightTab}
-          side="right"
+          <EditorPanel
+            tabs={leftTabs}
+            activeTab={activeLeftTab}
+            onTabChange={setActiveLeftTab}
+            side="left"
+          >
+            <div className={cn(activeLeftTab !== "components" && "hidden", "h-full w-full overflow-hidden")}>
+              {editorRef.current && <ComponentsPanel editor={editorRef.current} />}
+            </div>
+            <div className={cn(activeLeftTab !== "blocks" && "hidden")} id="gjs-blocks" />
+            <div className={cn(activeLeftTab !== "layers" && "hidden")} id="gjs-layers" />
+            <div className={cn(activeLeftTab !== "assets" && "hidden")} id="gjs-assets" />
+            {documentQuery.isLoading ? <Skeleton className="mt-4 h-24 w-full" /> : null}
+          </EditorPanel>
+        </ResizablePanel>
+        <ResizableHandle withHandle className="hidden lg:flex" />
+        <ResizablePanel
+          defaultSize={60}
+          minSize={30}
         >
-          <div className={cn(activeRightTab !== "content" && "hidden")}>
-            <PlaceholderContentPanel
-              fields={placeholderSchema.fields}
-              onChange={handlePlaceholderChange}
-              values={placeholderValues}
-            />
-          </div>
-          <div className={cn(activeRightTab !== "style" && "hidden")} id="gjs-styles" />
-          <div className={cn(activeRightTab !== "advanced" && "hidden")}>
-            <WidgetConfigPanel
-              fields={
-                selectedWidget
-                  ? (widgetSchemas[selectedWidget.slug as keyof typeof widgetSchemas]
-                      ?.fields ?? [])
-                  : []
-              }
-              onChange={handleWidgetConfigChange}
-              props={selectedWidget?.props ?? {}}
-              widgetName={selectedWidget?.slug ?? null}
-            />
-          </div>
-          <div className={cn("space-y-3", activeRightTab !== "code" && "hidden")}>
-            <LandingCodePanel
-              cssError={customCssError}
-              customCss={customCss}
-              html={codeSnapshot.html}
-              onCustomCssChange={handleCustomCssChange}
-            />
-          </div>
-        </EditorPanel>
-      </div>
+          <main className="h-full min-w-0 overflow-x-auto bg-muted/40 p-4">
+            <Card className="flex h-full justify-center overflow-hidden border-dashed bg-background/95">
+              <CardContent className="h-full p-0">
+                <motion.div
+                  animate={{ width: devicePreviewWidths[device] }}
+                  className="h-full max-w-full overflow-hidden"
+                  initial={false}
+                  transition={{ duration: 0.28, ease: "easeInOut" }}
+                >
+                  <GrapesCanvas
+                    device={device}
+                    document={documentQuery.data}
+                    onEditorReady={handleEditorReady}
+                  />
+                </motion.div>
+              </CardContent>
+            </Card>
+          </main>
+        </ResizablePanel>
+        <ResizableHandle withHandle className="hidden lg:flex" />
+        <ResizablePanel
+          defaultSize={22}
+          minSize={14}
+          maxSize={40}
+          className="hidden lg:flex"
+        >
+          <EditorPanel
+            tabs={rightTabs}
+            activeTab={activeRightTab}
+            onTabChange={setActiveRightTab}
+            side="right"
+          >
+            <div className={cn(activeRightTab !== "content" && "hidden")}>
+              <PlaceholderContentPanel
+                fields={placeholderSchema.fields}
+                onChange={handlePlaceholderChange}
+                values={placeholderValues}
+              />
+            </div>
+            <div className={cn(activeRightTab !== "style" && "hidden")} id="gjs-styles" />
+            <div className={cn(activeRightTab !== "advanced" && "hidden")}>
+              <WidgetConfigPanel
+                fields={
+                  selectedWidget
+                    ? (widgetSchemas[selectedWidget.slug as keyof typeof widgetSchemas]
+                        ?.fields ?? [])
+                    : []
+                }
+                onChange={handleWidgetConfigChange}
+                props={selectedWidget?.props ?? {}}
+                widgetName={selectedWidget?.slug ?? null}
+              />
+            </div>
+            <div className={cn("space-y-3", activeRightTab !== "code" && "hidden")}>
+              <LandingCodePanel
+                cssError={customCssError}
+                customCss={customCss}
+                html={codeSnapshot.html}
+                onCustomCssChange={handleCustomCssChange}
+              />
+            </div>
+          </EditorPanel>
+        </ResizablePanel>
+      </ResizablePanelGroup>
       <PublishModal
         isOpen={isPublishModalOpen}
         landingId={landingId}
@@ -678,6 +734,45 @@ function SaveStatusBadge({ status }: { status: SaveStatus }) {
   );
 }
 
+/** Threshold (px) below which tab labels collapse to icon-only mode. */
+const TAB_COLLAPSE_THRESHOLD = 280;
+
+/**
+ * Tracks the width of a container element via ResizeObserver.
+ * Returns [ref, width] so the caller can attach the ref and read the width.
+ */
+function useContainerWidth<E extends HTMLElement = HTMLElement>(): [
+  React.RefObject<E | null>,
+  number
+] {
+  const ref = React.useRef<E | null>(null);
+  const [width, setWidth] = React.useState(0);
+
+  React.useEffect(() => {
+    const element = ref.current;
+
+    if (!element) {
+      return;
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const inlineSize =
+          entry.borderBoxSize?.[0]?.inlineSize ?? entry.contentRect.width;
+        setWidth(inlineSize);
+      }
+    });
+
+    observer.observe(element, { box: "border-box" });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  return [ref, width];
+}
+
 function EditorPanel<
   T extends readonly {
     icon: React.ComponentType<{ className?: string }>;
@@ -697,36 +792,67 @@ function EditorPanel<
   side: "left" | "right";
   tabs: T;
 }) {
-  return (
-    <aside className="flex min-h-[360px] min-w-0 flex-col bg-background">
-      <div
-        className="flex items-center gap-1 border-b p-2"
-        role="tablist"
-        aria-label={`${side} editor panel`}
-      >
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const selected = activeTab === tab.id;
+  const [asideRef, asideWidth] = useContainerWidth<HTMLElement>();
+  const isCollapsed = asideWidth > 0 && asideWidth < TAB_COLLAPSE_THRESHOLD;
 
-          return (
-            <Button
-              key={tab.id}
-              aria-selected={selected}
-              className={cn(
-                "h-9 flex-1 px-2 text-xs",
-                selected && "bg-accent text-accent-foreground"
-              )}
-              onClick={() => onTabChange(tab.id)}
-              role="tab"
-              type="button"
-              variant="ghost"
-            >
-              <Icon className="h-4 w-4" aria-hidden="true" />
-              {tab.label}
-            </Button>
-          );
-        })}
-      </div>
+  return (
+    <aside
+      ref={asideRef}
+      className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-background"
+    >
+      <TooltipProvider delayDuration={150}>
+        <div
+          className="flex shrink-0 items-center gap-1 border-b p-2"
+          role="tablist"
+          aria-label={`${side} editor panel`}
+        >
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const selected = activeTab === tab.id;
+
+            const button = (
+              <Button
+                key={tab.id}
+                aria-selected={selected}
+                aria-label={tab.label}
+                className={cn(
+                  "h-9 flex-1 min-w-0 px-2 text-xs transition-all duration-200",
+                  selected && "bg-accent text-accent-foreground",
+                  isCollapsed && "px-1.5"
+                )}
+                onClick={() => onTabChange(tab.id)}
+                role="tab"
+                type="button"
+                variant="ghost"
+              >
+                <Icon
+                  className={cn(
+                    "shrink-0 transition-all duration-200",
+                    isCollapsed ? "h-5 w-5" : "h-4 w-4"
+                  )}
+                  aria-hidden="true"
+                />
+                {!isCollapsed && (
+                  <span className="truncate">{tab.label}</span>
+                )}
+              </Button>
+            );
+
+            if (isCollapsed) {
+              return (
+                <Tooltip key={tab.id}>
+                  <TooltipTrigger asChild>{button}</TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    {tab.label}
+                  </TooltipContent>
+                </Tooltip>
+              );
+            }
+
+            return button;
+          })}
+        </div>
+      </TooltipProvider>
       <ScrollArea className="min-h-0 flex-1 p-3">
         <div className="space-y-3">
           {children}

@@ -1,5 +1,10 @@
 import { Controller, Get } from "@nestjs/common";
-import type { HealthResponse } from "@workspace/types";
+
+type HealthResponse = {
+  status: "ok";
+  service: string;
+  timestamp: string;
+};
 
 @Controller("health")
 export class HealthController {
