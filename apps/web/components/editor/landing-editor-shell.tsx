@@ -57,7 +57,6 @@ import {
   acquireLandingLock,
   fetchLandingEditorDocument,
   fetchLandingVersions,
-  publishLandingDraft,
   refreshLandingLock,
   releaseLandingLock,
   saveLandingDraftVersion,
@@ -123,13 +122,14 @@ const rightTabs = [
   { id: "code", label: "Code", icon: Code2 }
 ] as const;
 
+/** Narrow GrapesJS `Editor` for APIs used here (upstream typings omit some members). */
 type GrapesEditor = Editor & {
-  AssetManager: any;
-  Css: any;
-  Blocks: any;
+  AssetManager: {
+    getAll: () => { toJSON: () => unknown };
+  };
   runCommand: (command: string) => unknown;
-  select: (component: unknown) => unknown;
-  getSelected: () => any;
+  select: (component: unknown | null) => unknown;
+  getSelected: () => unknown;
 };
 
 function LandingEditorShell({ landingId }: LandingEditorShellProps) {
@@ -299,8 +299,7 @@ function LandingEditorShell({ landingId }: LandingEditorShellProps) {
         documentQuery.data.placeholderValues
       )
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [documentQuery.data]);
+  }, [documentQuery.data, placeholderSchema]);
 
   React.useEffect(() => {
     const editor = editorRef.current;
@@ -501,6 +500,14 @@ function LandingEditorShell({ landingId }: LandingEditorShellProps) {
     ? "Landing editor"
     : `Landing ${landingId.slice(0, 8)}`;
 
+  if (documentQuery.isLoading) {
+    return (
+      <div className="flex min-h-[calc(100vh-2rem)] items-center justify-center rounded-xl border bg-background shadow-sm">
+        <Skeleton className="h-10 w-10 rounded-full" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-xl border bg-background shadow-sm">
       <EditorTopBar
@@ -514,10 +521,7 @@ function LandingEditorShell({ landingId }: LandingEditorShellProps) {
         title={title}
         versions={versionsQuery.data?.length ?? 0}
       />
-      <ResizablePanelGroup
-        direction="horizontal"
-        className="min-h-0 flex-1 bg-muted/30"
-      >
+      <ResizablePanelGroup direction="horizontal" className="min-h-0 flex-1 bg-muted/30">
         <ResizablePanel
           defaultSize={18}
           minSize={12}
@@ -530,7 +534,12 @@ function LandingEditorShell({ landingId }: LandingEditorShellProps) {
             onTabChange={setActiveLeftTab}
             side="left"
           >
-            <div className={cn(activeLeftTab !== "components" && "hidden", "h-full w-full overflow-hidden")}>
+            <div
+              className={cn(
+                activeLeftTab !== "components" && "hidden",
+                "h-full w-full overflow-hidden"
+              )}
+            >
               {editorRef.current && <ComponentsPanel editor={editorRef.current} />}
             </div>
             <div className={cn(activeLeftTab !== "blocks" && "hidden")} id="gjs-blocks" />
@@ -540,10 +549,7 @@ function LandingEditorShell({ landingId }: LandingEditorShellProps) {
           </EditorPanel>
         </ResizablePanel>
         <ResizableHandle withHandle className="hidden lg:flex" />
-        <ResizablePanel
-          defaultSize={60}
-          minSize={30}
-        >
+        <ResizablePanel defaultSize={60} minSize={30}>
           <main className="h-full min-w-0 overflow-x-auto bg-muted/40 p-4">
             <Card className="flex h-full justify-center overflow-hidden border-dashed bg-background/95">
               <CardContent className="h-full p-0">
@@ -832,9 +838,7 @@ function EditorPanel<
                   )}
                   aria-hidden="true"
                 />
-                {!isCollapsed && (
-                  <span className="truncate">{tab.label}</span>
-                )}
+                {!isCollapsed && <span className="truncate">{tab.label}</span>}
               </Button>
             );
 
