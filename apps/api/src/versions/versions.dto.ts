@@ -25,10 +25,18 @@ const draftVersionSchema = z.object({
   css: z.string().optional(),
   customCss: z.string().optional(),
   html: z.string().optional(),
+  layout: z
+    .object({
+      bodyAttributes: z.record(z.string(), z.string()).optional(),
+      bodyClass: z.string().optional(),
+      htmlAttributes: z.record(z.string(), z.string()).optional(),
+      wrapperClass: z.string().optional()
+    })
+    .optional(),
   placeholderValues: z.unknown().optional(),
   device: z.enum(["mobile", "tablet", "desktop"]).optional(),
   message: z.string().optional(),
-  source: z.literal("grapesjs").optional()
+  source: z.enum(["grapesjs", "studio-sdk"]).optional()
 });
 
 export class DraftVersionDto extends createZodDto(draftVersionSchema) {}

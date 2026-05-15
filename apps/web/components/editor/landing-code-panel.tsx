@@ -17,6 +17,7 @@ type LandingCodePanelProps = {
   cssError: string | null;
   customCss: string;
   html: string;
+  onHtmlChange: (value: string) => void;
   onCustomCssChange: (value: string) => void;
 };
 
@@ -33,12 +34,41 @@ function LandingCodePanel({
   cssError,
   customCss,
   html,
+  onHtmlChange,
   onCustomCssChange
 }: LandingCodePanelProps) {
   const [activeTab, setActiveTab] = React.useState<CodePanelTab>("html");
+  const [htmlMode, setHtmlMode] = React.useState<"edit" | "read">("read");
+  const [htmlDraft, setHtmlDraft] = React.useState(html);
+  const [beautifyHtml, setBeautifyHtml] = React.useState<
+    ((value: string, options?: Record<string, unknown>) => string) | null
+  >(null);
   const handleMount = React.useCallback<OnMount>(() => {
     void setupTailwindIntelliSense();
   }, []);
+  const formattedHtml = React.useMemo(() => {
+    if (!beautifyHtml) {
+      return html;
+    }
+
+    return beautifyHtml(html, {
+      indent_size: 2,
+      preserve_newlines: true,
+      wrap_line_length: 100
+    });
+  }, [beautifyHtml, html]);
+
+  React.useEffect(() => {
+    import("js-beautify")
+      .then((module) => setBeautifyHtml(() => module.html))
+      .catch(() => setBeautifyHtml(null));
+  }, []);
+
+  React.useEffect(() => {
+    if (htmlMode === "read") {
+      setHtmlDraft(formattedHtml);
+    }
+  }, [formattedHtml, htmlMode]);
 
   return (
     <div className="space-y-3">
@@ -71,17 +101,51 @@ function LandingCodePanel({
       <div className={cn(activeTab !== "html" && "hidden")} role="tabpanel">
         <div className="mb-2 flex items-center justify-between gap-2">
           <span className="text-xs font-medium text-muted-foreground">Rendered HTML</span>
-          <Badge variant="secondary">Read only</Badge>
+          <div className="grid grid-cols-2 gap-1 rounded-md border bg-muted/40 p-1">
+            <Button
+              size="sm"
+              type="button"
+              variant="ghost"
+              className={cn(
+                "h-7 px-2 text-xs",
+                htmlMode === "read" && "bg-background shadow-sm"
+              )}
+              onClick={() => setHtmlMode("read")}
+            >
+              Read
+            </Button>
+            <Button
+              size="sm"
+              type="button"
+              variant="ghost"
+              className={cn(
+                "h-7 px-2 text-xs",
+                htmlMode === "edit" && "bg-background shadow-sm"
+              )}
+              onClick={() => setHtmlMode("edit")}
+            >
+              Edit
+            </Button>
+          </div>
         </div>
         <div className="overflow-hidden rounded-lg border">
           <MonacoEditor
             height="360px"
             language="html"
             onMount={handleMount}
-            options={{ ...editorOptions, readOnly: true }}
+            onChange={(value: string | undefined) => {
+              if (htmlMode !== "edit") {
+                return;
+              }
+
+              const nextValue = value ?? "";
+              setHtmlDraft(nextValue);
+              onHtmlChange(nextValue);
+            }}
+            options={{ ...editorOptions, readOnly: htmlMode !== "edit" }}
             path="landing.html"
             theme="vs-dark"
-            value={html}
+            value={htmlDraft}
           />
         </div>
       </div>

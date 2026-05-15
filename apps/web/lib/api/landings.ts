@@ -1,5 +1,9 @@
 import { apiClient } from "./client";
-import type { PlaceholderSchema, PlaceholderValue } from "@workspace/types";
+import type {
+  LandingEditorLayout,
+  PlaceholderSchema,
+  PlaceholderValue
+} from "@workspace/types";
 
 type LandingStatus = "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED";
 
@@ -97,6 +101,7 @@ type LandingEditorDocument = {
   css?: string;
   customCss?: string;
   html?: string;
+  layout?: LandingEditorLayout;
   placeholderValues?: PlaceholderValue;
   styles?: unknown;
   template?: {
@@ -110,7 +115,7 @@ type LandingEditorDocument = {
 type LandingEditorDraftPayload = LandingEditorDocument & {
   device: "mobile" | "tablet" | "desktop";
   message?: string;
-  source: "grapesjs";
+  source: "grapesjs" | "studio-sdk";
 };
 
 type LandingEditorDraftResponse = {

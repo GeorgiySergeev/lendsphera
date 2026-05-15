@@ -13,6 +13,10 @@ import type { WidgetLibraryListItem } from "@workspace/types";
 import { Button, Input, ScrollArea, Skeleton } from "@workspace/ui";
 
 import { useWidgets } from "../../hooks/use-widgets";
+import {
+  insertHtmlAtSelection,
+  type EditorLike
+} from "../../lib/editor/landing-editor-adapter";
 import { toast } from "../../lib/toast";
 
 type WidgetsPanelProps = {
@@ -89,19 +93,12 @@ function WidgetsPanel({ editor }: WidgetsPanelProps) {
       return;
     }
 
-    const gjs = editor as Editor & {
-      addComponents: (html: string) => unknown[];
-      select: (c: unknown) => void;
-    };
+    const added = insertHtmlAtSelection(editor as unknown as EditorLike, html);
 
-    const added = gjs.addComponents(html);
-
-    if (added && added.length > 0) {
-      gjs.select(added[0]);
-
+    if (added) {
       setTimeout(() => {
         try {
-          const el = (added[0] as { getEl?: () => HTMLElement | undefined }).getEl?.();
+          const el = (added as { getEl?: () => HTMLElement | undefined }).getEl?.();
           if (el) {
             el.scrollIntoView({ behavior: "smooth", block: "center" });
             const originalOutline = el.style.outline;

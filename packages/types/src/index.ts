@@ -65,6 +65,13 @@ export const PlaceholderSchemaSchema = z.object({
   fields: z.array(PlaceholderFieldSchema).default([])
 });
 
+export const LandingEditorLayoutSchema = z.object({
+  bodyAttributes: z.record(z.string(), z.string()).optional(),
+  bodyClass: z.string().optional(),
+  htmlAttributes: z.record(z.string(), z.string()).optional(),
+  wrapperClass: z.string().optional()
+});
+
 export const HealthResponseSchema = z.object({
   status: z.literal("ok"),
   service: z.string().min(1),
@@ -78,4 +85,5 @@ export type PlaceholderOption = z.infer<typeof PlaceholderOptionSchema>;
 export type PlaceholderValue = z.infer<typeof PlaceholderValueSchema>;
 export type PlaceholderField = z.infer<typeof PlaceholderFieldSchema>;
 export type PlaceholderSchema = z.infer<typeof PlaceholderSchemaSchema>;
+export type LandingEditorLayout = z.infer<typeof LandingEditorLayoutSchema>;
 export type HealthResponse = z.infer<typeof HealthResponseSchema>;

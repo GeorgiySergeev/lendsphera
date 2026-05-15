@@ -20,7 +20,7 @@ export function MiniComponentCard({
 }) {
   const [isDragging, setIsDragging] = React.useState(false);
   const [detail, setDetail] = React.useState<ComponentDetail | null>(null);
-  
+
   // We need details to get full variants HTML if inserting/selecting variants
   const fetchDetail = React.useCallback(async () => {
     if (!detail) {
@@ -28,7 +28,7 @@ export function MiniComponentCard({
         const full = await componentsApi.get(component.id);
         setDetail(full);
         return full;
-      } catch (e) {
+      } catch {
         return null;
       }
     }
@@ -37,14 +37,16 @@ export function MiniComponentCard({
 
   const handleDragStart = (e: React.DragEvent) => {
     setIsDragging(true);
-    e.dataTransfer.setData('text/plain', JSON.stringify({
-      type: 'affly-component',
+    const payload = JSON.stringify({
+      type: "affly-component",
       componentId: component.id,
       html: component.html,
       css: "",
-      name: component.name,
-    }));
-    e.dataTransfer.effectAllowed = 'copy';
+      name: component.name
+    });
+    e.dataTransfer.setData("application/x-affly-component", payload);
+    e.dataTransfer.setData("text/plain", payload);
+    e.dataTransfer.effectAllowed = "copy";
   };
 
   const handleDragEnd = () => {
@@ -57,7 +59,7 @@ export function MiniComponentCard({
     if (component.variantsCount > 1) {
       // The popover trigger will handle opening
     } else {
-      onInsert(full ? full.html : component.html, full ? (full.css || "") : "");
+      onInsert(full ? full.html : component.html, full ? full.css || "" : "");
     }
   };
 
@@ -69,31 +71,34 @@ export function MiniComponentCard({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onClick={() => onPreview(component.id)}
-      className={`group relative flex flex-col cursor-grab active:cursor-grabbing border rounded-md overflow-hidden bg-background transition-all hover:border-primary/50 ${isDragging ? 'opacity-50 scale-95' : ''}`}
+      className={`group relative flex flex-col cursor-grab active:cursor-grabbing border rounded-md overflow-hidden bg-background transition-all hover:border-primary/50 ${isDragging ? "opacity-50 scale-95" : ""}`}
     >
       <div className="h-[70px] relative bg-muted overflow-hidden flex items-center justify-center">
         {/* We use scale to fit the component into the small box */}
-        <div className="absolute inset-0" style={{ pointerEvents: 'none' }}>
-          <iframe 
-            srcDoc={iframeSrc} 
-            sandbox="allow-scripts" 
+        <div className="absolute inset-0" style={{ pointerEvents: "none" }}>
+          <iframe
+            srcDoc={iframeSrc}
+            sandbox="allow-scripts"
             className="w-[400%] h-[400%] border-0 origin-top-left"
-            style={{ transform: 'scale(0.25)' }}
+            style={{ transform: "scale(0.25)" }}
             tabIndex={-1}
           />
         </div>
-        
+
         {/* Hover overlay */}
         <div className="absolute inset-0 bg-background/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2">
           {component.variantsCount > 1 ? (
-            <VariantSelectPopover 
-              component={detail || { ...component, html: component.html, css: "", variants: [] } as any} 
+            <VariantSelectPopover
+              component={
+                detail ||
+                ({ ...component, html: component.html, css: "", variants: [] } as any)
+              }
               onPreview={(vid) => onPreview(component.id, vid)}
               onInsert={onInsert}
             >
-              <Button 
-                size="sm" 
-                variant="default" 
+              <Button
+                size="sm"
+                variant="default"
                 className="w-full h-8 text-xs font-medium"
                 onMouseEnter={fetchDetail}
                 onClick={(e) => e.stopPropagation()}
@@ -103,9 +108,9 @@ export function MiniComponentCard({
               </Button>
             </VariantSelectPopover>
           ) : (
-            <Button 
-              size="sm" 
-              variant="default" 
+            <Button
+              size="sm"
+              variant="default"
               className="w-full h-8 text-xs font-medium"
               onClick={handleInsertClick}
             >
@@ -124,10 +129,11 @@ export function MiniComponentCard({
   return (
     <TooltipProvider delayDuration={500}>
       <Tooltip>
-        <TooltipTrigger asChild>
-          {content}
-        </TooltipTrigger>
-        <TooltipContent side="right" className="w-64 p-0 rounded-md overflow-hidden border bg-background shadow-lg">
+        <TooltipTrigger asChild>{content}</TooltipTrigger>
+        <TooltipContent
+          side="right"
+          className="w-64 p-0 rounded-md overflow-hidden border bg-background shadow-lg"
+        >
           <div className="h-[180px] relative">
             <iframe
               srcDoc={iframeSrc}
@@ -139,7 +145,9 @@ export function MiniComponentCard({
           <div className="p-2 border-t text-xs">
             <div className="font-medium">{component.name}</div>
             {component.variantsCount > 1 && (
-              <div className="text-muted-foreground mt-0.5">{component.variantsCount} variants available</div>
+              <div className="text-muted-foreground mt-0.5">
+                {component.variantsCount} variants available
+              </div>
             )}
           </div>
         </TooltipContent>

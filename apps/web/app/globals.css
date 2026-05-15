@@ -231,7 +231,7 @@
 #gjs-blocks .gjs-block__media svg * {
   fill: none !important;
   stroke: currentColor;
-  stroke-width: 1.75;
+  stroke-width: 1.2;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -324,6 +324,22 @@
   background: transparent;
 }
 
+.landing-grapes-editor .gjs-pn-panels,
+.landing-grapes-editor .gjs-pn-views-container,
+.landing-grapes-editor .gjs-pn-views,
+.landing-grapes-editor .gjs-pn-buttons,
+.landing-grapes-editor .gjs-frame-wrapper__top,
+.landing-grapes-editor .gjs-frame-wrapper__right,
+.landing-grapes-editor .gjs-frame-wrapper__left,
+.landing-grapes-editor .gjs-frame-wrapper__bottom {
+  display: none !important;
+}
+
+.landing-grapes-editor .gjs-editor-cont,
+.landing-grapes-editor .gjs-cv-canvas {
+  top: 0 !important;
+}
+
 .landing-grapes-editor .gjs-cv-canvas {
   inset: 0;
   width: 100%;
@@ -336,9 +352,70 @@
   height: 100%;
 }
 
+.landing-grapes-editor .gjs-cv-canvas__tools {
+  display: block !important;
+  pointer-events: none;
+}
+
+.landing-grapes-editor .gjs-toolbar,
+.landing-grapes-editor .gjs-resizer {
+  pointer-events: auto;
+}
+
+.landing-grapes-editor .gjs-toolbar {
+  border-radius: 10px;
+  overflow: hidden;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 10px 30px hsl(var(--foreground) / 0.12);
+}
+
+.landing-grapes-editor .gjs-toolbar-item {
+  color: hsl(var(--foreground));
+  border-right: 1px solid hsl(var(--border));
+  background: transparent;
+  font-size: 11px;
+}
+
+.landing-grapes-editor .gjs-toolbar-item:hover {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
 .landing-grapes-editor iframe.gjs-frame {
   width: 100% !important;
   max-width: none !important;
+}
+
+.landing-native-style-panel .gjs-sm-sectors {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.landing-native-style-panel .gjs-sm-sector {
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  overflow: hidden;
+  background: hsl(var(--background));
+}
+
+.landing-native-style-panel .gjs-sm-title {
+  background: hsl(var(--muted) / 0.35);
+  color: hsl(var(--foreground));
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.landing-native-style-panel .gjs-sm-properties {
+  background: transparent;
+}
+
+.landing-native-style-panel .gjs-sm-property,
+.landing-native-style-panel .gjs-sm-composite,
+.landing-native-style-panel .gjs-clm-tags {
+  color: hsl(var(--foreground));
 }
 
 /* Builder email editor - stretch both internal react-email-editor wrappers. */

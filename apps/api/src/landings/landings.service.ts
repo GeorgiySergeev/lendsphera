@@ -1,4 +1,9 @@
-import { ConflictException, ForbiddenException, Injectable, Logger } from "@nestjs/common";
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  Logger
+} from "@nestjs/common";
 import { AuditAction, LandingStatus, Prisma, Role, VersionStatus } from "@prisma/client";
 
 import { AuditService } from "../audit/audit.service";
@@ -137,6 +142,7 @@ export class LandingsService {
       if (grapesJson) {
         doc.assets = grapesJson.assets;
         doc.components = grapesJson.components;
+        doc.layout = grapesJson.layout;
         doc.styles = grapesJson.styles;
       }
     }

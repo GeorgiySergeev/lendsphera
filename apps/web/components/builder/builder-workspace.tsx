@@ -356,25 +356,6 @@ function BuilderWorkspace() {
   return (
     <div className="flex h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-xl border bg-background shadow-sm">
       <header className="sticky z-20 flex flex-wrap items-center justify-between gap-3 border-b bg-background/95 px-4 py-2.5 backdrop-blur">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <Input
-              value={titleDraft}
-              onChange={(event) => setTitleDraft(event.target.value)}
-              onBlur={handleRenamePage}
-              className="h-9 border-0 px-0 text-lg font-semibold shadow-none focus-visible:ring-0"
-            />
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <SaveStatusBadge status={saveStatus} />
-              <span>
-                {lastSavedAt
-                  ? `Last saved ${lastSavedAt.toLocaleTimeString()}`
-                  : "Autosave every 10 seconds"}
-              </span>
-            </div>
-          </div>
-        </div>
-
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleCreateNewPage}>
             <FilePlus2 className="h-4 w-4" aria-hidden="true" />
@@ -424,8 +405,25 @@ function BuilderWorkspace() {
         </div>
       </header>
 
-      <div className="flex-1 min-h-0 overflow-hidden">
-        <div className="builder-email-editor-shell h-full min-h-0">
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+        <div className="border-b px-4 py-2 bg-background/95 backdrop-blur flex flex-row items-center justify-between gap-4">
+          <Input
+            value={titleDraft}
+            onChange={(event) => setTitleDraft(event.target.value)}
+            onBlur={handleRenamePage}
+            placeholder="Landing name"
+            className="flex-1 min-w-0"
+          />
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <SaveStatusBadge status={saveStatus} />
+            <span>
+              {lastSavedAt
+                ? `Last saved ${lastSavedAt.toLocaleTimeString()}`
+                : "Autosave every 10 seconds"}
+            </span>
+          </div>
+        </div>
+        <div className="flex-1 builder-email-editor-shell h-full min-h-0 overflow-hidden">
           <EmailEditor
             ref={emailEditorRef}
             minHeight={0}
@@ -468,9 +466,7 @@ function BuilderWorkspace() {
           <span className="text-muted-foreground/50">|</span>
           <span>
             Latest: v{versionsQuery.data[0].versionNum}
-            {versionsQuery.data[0].author?.email
-              ? ` by ${versionsQuery.data[0].author.email}`
-              : ""}
+            {versionsQuery.data[0].author?.email ? by : ""}
           </span>
         </footer>
       ) : null}

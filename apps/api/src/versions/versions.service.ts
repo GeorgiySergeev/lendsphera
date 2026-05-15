@@ -92,6 +92,7 @@ export class VersionsService {
         const grapesJson = {
           assets: dto.assets,
           components: dto.components,
+          layout: dto.layout,
           styles: dto.styles
         };
 
