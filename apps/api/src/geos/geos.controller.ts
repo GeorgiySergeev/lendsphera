@@ -17,10 +17,12 @@ import { RolesGuard } from "../common/roles.guard";
 import {
   CreateGeoDto,
   GeoListQueryDto,
+  GeoLocalesListQueryDto,
   ImportGeosDto,
   ReorderGeosDto,
   UpdateGeoDto
 } from "./geos.dto";
+import { GeoLocalesService } from "./geo-locales.service";
 import { GeosService } from "./geos.service";
 
 @ApiTags("Geos")
@@ -28,12 +30,33 @@ import { GeosService } from "./geos.service";
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller("geos")
 export class GeosController {
-  constructor(private readonly geos: GeosService) {}
+  constructor(
+    private readonly geos: GeosService,
+    private readonly geoLocales: GeoLocalesService
+  ) {}
 
   @Roles(...READ_ROLES)
   @Get()
   list(@Query() query: GeoListQueryDto) {
     return this.geos.list(query);
+  }
+
+  @Roles(...READ_ROLES)
+  @Get("locales/countries/:code/meta")
+  getCountryCatalogMeta(@Param("code") code: string) {
+    return this.geoLocales.getCountryCatalogMeta(code);
+  }
+
+  @Roles(...READ_ROLES)
+  @Get("locales/countries/:code")
+  listLocalesForCountry(@Param("code") code: string) {
+    return this.geoLocales.getCountryLocales(code);
+  }
+
+  @Roles(...READ_ROLES)
+  @Get("locales")
+  listLocales(@Query() query: GeoLocalesListQueryDto) {
+    return this.geoLocales.listLocales(query);
   }
 
   @Roles(...READ_ROLES)

@@ -1,4 +1,4 @@
-import { apiClient } from "./client";
+import { apiClient, refreshClient } from "./client";
 import { useAuthStore, type AuthLoginResponse } from "../../stores/auth-store";
 
 // ────────────────────────────────────────────────────────────────
@@ -23,7 +23,7 @@ type RegisterInput = {
 async function login({ email, password }: LoginInput): Promise<AuthLoginResponse> {
   const { data } = await apiClient.post<AuthLoginResponse>("/auth/login", {
     email,
-    password,
+    password
   });
 
   useAuthStore.getState().setSession(data);
@@ -45,5 +45,26 @@ async function logout(): Promise<void> {
   }
 }
 
-export { login, register, logout };
+async function restoreSession(): Promise<AuthLoginResponse | null> {
+  try {
+    const refresh = await refreshClient.post<{ accessToken: string }>("/auth/refresh");
+    const accessToken = refresh.data.accessToken;
+
+    useAuthStore.getState().setAccessToken(accessToken);
+
+    const me = await refreshClient.get<AuthLoginResponse["user"]>("/auth/me", {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+
+    const session = { accessToken, user: me.data };
+    useAuthStore.getState().setSession(session);
+
+    return session;
+  } catch {
+    useAuthStore.getState().clearSession();
+    return null;
+  }
+}
+
+export { login, register, logout, restoreSession };
 export type { LoginInput, RegisterInput };

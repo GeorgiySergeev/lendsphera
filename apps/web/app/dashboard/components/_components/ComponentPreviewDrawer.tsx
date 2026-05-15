@@ -1,6 +1,15 @@
 "use client";
 
-import { Copy, Monitor, Pencil, Plus, Smartphone, Tablet } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  Copy,
+  Monitor,
+  Pencil,
+  Plus,
+  Smartphone,
+  Tablet
+} from "lucide-react";
 import * as React from "react";
 
 import {
@@ -18,7 +27,6 @@ import {
   Skeleton,
   cn
 } from "@workspace/ui";
-import type { ComponentVariant } from "@workspace/types";
 
 import { useComponent } from "../../../../hooks/use-components";
 import { toast } from "../../../../lib/toast";
@@ -60,7 +68,7 @@ function ComponentPreviewDrawer({
   const selectedVariant =
     variantId === "default"
       ? null
-      : component?.variants.find((variant) => variant.id === variantId) ?? null;
+      : (component?.variants.find((variant) => variant.id === variantId) ?? null);
   const variants = component?.variants.filter((variant) => !variant.isDefault) ?? [];
   const srcDoc = component ? buildPreviewHtml(component, selectedVariant) : "";
   const currentHtml = selectedVariant?.html ?? component?.html ?? "";
@@ -71,12 +79,18 @@ function ComponentPreviewDrawer({
   };
 
   const addToEditor = () => {
-    toast.info("Open a landing first", "Components can be inserted from the landing editor.");
+    toast.info(
+      "Open a landing first",
+      "Components can be inserted from the landing editor."
+    );
   };
 
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex w-[95vw] flex-col p-0 sm:w-[88vw] xl:w-[55vw]">
+      <SheetContent
+        side="right"
+        className="flex w-[95vw] flex-col p-0 sm:w-[88vw] xl:w-[55vw]"
+      >
         <SheetHeader className="border-b p-4 pr-12">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
@@ -90,14 +104,27 @@ function ComponentPreviewDrawer({
             <div className="flex flex-wrap items-center gap-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="outline" className="min-w-36 justify-between">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-w-36 justify-between gap-2"
+                  >
                     {selectedVariant?.name ?? "Default"}
-                    <span className="text-muted-foreground">▾</span>
+                    <ChevronDown
+                      className="h-4 w-4 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44">
                   <DropdownMenuItem onClick={() => setVariantId("default")}>
-                    <span className="w-4">{variantId === "default" ? "●" : ""}</span>
+                    <Check
+                      className={cn(
+                        "h-4 w-4",
+                        variantId === "default" ? "opacity-100" : "opacity-0"
+                      )}
+                      aria-hidden="true"
+                    />
                     Default
                   </DropdownMenuItem>
                   {variants.map((variant) => (
@@ -105,7 +132,13 @@ function ComponentPreviewDrawer({
                       key={variant.id}
                       onClick={() => setVariantId(variant.id)}
                     >
-                      <span className="w-4">{variantId === variant.id ? "●" : ""}</span>
+                      <Check
+                        className={cn(
+                          "h-4 w-4",
+                          variantId === variant.id ? "opacity-100" : "opacity-0"
+                        )}
+                        aria-hidden="true"
+                      />
                       {variant.name}
                     </DropdownMenuItem>
                   ))}
@@ -125,9 +158,21 @@ function ComponentPreviewDrawer({
         </SheetHeader>
 
         <div className="flex items-center gap-2 border-b px-4 py-3">
-          <DeviceButton device="mobile" active={device === "mobile"} onClick={setDevice} />
-          <DeviceButton device="tablet" active={device === "tablet"} onClick={setDevice} />
-          <DeviceButton device="desktop" active={device === "desktop"} onClick={setDevice} />
+          <DeviceButton
+            device="mobile"
+            active={device === "mobile"}
+            onClick={setDevice}
+          />
+          <DeviceButton
+            device="tablet"
+            active={device === "tablet"}
+            onClick={setDevice}
+          />
+          <DeviceButton
+            device="desktop"
+            active={device === "desktop"}
+            onClick={setDevice}
+          />
           <span className="ml-auto text-xs text-muted-foreground">
             {deviceWidths[device]}px canvas
           </span>
@@ -154,7 +199,12 @@ function ComponentPreviewDrawer({
         </div>
 
         <SheetFooter className="border-t p-4 sm:flex-row sm:justify-between">
-          <Button type="button" variant="outline" onClick={() => void copyHtml()} disabled={!component}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void copyHtml()}
+            disabled={!component}
+          >
             <Copy className="h-4 w-4" aria-hidden="true" />
             Copy HTML
           </Button>

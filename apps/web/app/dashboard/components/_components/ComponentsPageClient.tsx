@@ -1,20 +1,32 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { ChevronDown, Plus, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { parseAsArrayOf, parseAsString, useQueryState } from "nuqs";
 import * as React from "react";
 
-import { Button } from "@workspace/ui";
-import type { ComponentCategory, ComponentListItem, ComponentsQueryParams } from "@workspace/types";
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "@workspace/ui";
+import type {
+  ComponentCategory,
+  ComponentListItem,
+  ComponentsQueryParams
+} from "@workspace/types";
 
 import { useComponentCategories, useComponents } from "../../../../hooks/use-components";
-import { toast } from "../../../../lib/toast";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@workspace/ui";
 import { CategorySidebar } from "./CategorySidebar";
 import { ComponentGrid } from "./ComponentGrid";
 import { ComponentPreviewDrawer } from "./ComponentPreviewDrawer";
-import { ComponentsFiltersBar, type SortOption, type ViewMode } from "./ComponentsFiltersBar";
+import {
+  ComponentsFiltersBar,
+  type SortOption,
+  type ViewMode
+} from "./ComponentsFiltersBar";
 import { QuickAddDialog } from "./QuickAddDialog";
 
 function ComponentsPageClient() {
@@ -25,10 +37,7 @@ function ComponentsPageClient() {
     "tags",
     parseAsArrayOf(parseAsString).withDefault([])
   );
-  const [sort, setSort] = useQueryState(
-    "sort",
-    parseAsString.withDefault("updatedAt")
-  );
+  const [sort, setSort] = useQueryState("sort", parseAsString.withDefault("updatedAt"));
   const [view, setView] = React.useState<ViewMode>("grid");
   const [previewId, setPreviewId] = React.useState<string | null>(null);
   const [quickAddOpen, setQuickAddOpen] = React.useState(false);
@@ -90,7 +99,9 @@ function ComponentsPageClient() {
 
   const toggleTag = React.useCallback(
     (tag: string) => {
-      updateTags(tags.includes(tag) ? tags.filter((item) => item !== tag) : [...tags, tag]);
+      updateTags(
+        tags.includes(tag) ? tags.filter((item) => item !== tag) : [...tags, tag]
+      );
     },
     [tags, updateTags]
   );
@@ -131,20 +142,28 @@ function ComponentsPageClient() {
         <div className="flex shrink-0 items-center gap-2">
           <DropdownMenu>
             <div className="flex">
-              <Button type="button" onClick={addComponent} className="rounded-r-none border-r border-r-primary-foreground/20">
-                <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
+              <Button
+                type="button"
+                onClick={addComponent}
+                className="rounded-r-none border-r border-r-primary-foreground/20 pr-3"
+              >
+                <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
                 Add Component
               </Button>
               <DropdownMenuTrigger asChild>
-                <Button type="button" className="rounded-l-none px-2">
-                  <span className="sr-only">More options</span>
-                  ▾
+                <Button
+                  type="button"
+                  className="rounded-l-none px-2"
+                  aria-label="More add options"
+                >
+                  <ChevronDown className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
             </div>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuItem onClick={() => setQuickAddOpen(true)}>
-                ⚡ Quick Add
+                <Zap className="mr-2 h-4 w-4" aria-hidden="true" />
+                Quick Add
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -163,11 +182,14 @@ function ComponentsPageClient() {
         <main className="min-w-0">
           <ComponentsFiltersBar
             search={search}
+            categories={categories}
+            selectedCategoryId={categoryId}
             selectedTags={tags}
             sort={safeSort}
             view={view}
             total={componentsQuery.data?.total ?? components.length}
             onSearchChange={(value) => void setSearch(value)}
+            onCategoryChange={(id) => void setCategoryId(id)}
             onTagRemove={toggleTag}
             onSortChange={(value) => void setSort(value)}
             onViewChange={updateView}
@@ -203,10 +225,7 @@ function ComponentsPageClient() {
         onEdit={openEditor}
       />
 
-      <QuickAddDialog 
-        isOpen={quickAddOpen} 
-        onOpenChange={setQuickAddOpen} 
-      />
+      <QuickAddDialog isOpen={quickAddOpen} onOpenChange={setQuickAddOpen} />
     </div>
   );
 }

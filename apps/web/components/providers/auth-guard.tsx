@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
+import { restoreSession } from "../../lib/api/auth";
 import { useAuthStore } from "../../stores/auth-store";
 
 // ────────────────────────────────────────────────────────────────
@@ -38,8 +39,11 @@ function AuthGuard({ children }: AuthGuardProps) {
   const user = useAuthStore((state) => state.user);
 
   const [hasHydrated, setHasHydrated] = useState<boolean>(() =>
-    useAuthStore.persist.hasHydrated(),
+    useAuthStore.persist.hasHydrated()
   );
+  const [isCheckingSession, setIsCheckingSession] = useState(false);
+  const hasAttemptedRestoreRef = useRef(false);
+  const restoreInFlightRef = useRef(false);
 
   useEffect(() => {
     if (hasHydrated) return;
@@ -51,13 +55,46 @@ function AuthGuard({ children }: AuthGuardProps) {
 
   useEffect(() => {
     if (!hasHydrated) return;
-    if (user) return;
+    if (user) {
+      hasAttemptedRestoreRef.current = false;
+      restoreInFlightRef.current = false;
+      if (isCheckingSession) {
+        setIsCheckingSession(false);
+      }
+      return;
+    }
+    if (restoreInFlightRef.current || hasAttemptedRestoreRef.current) return;
 
-    const next = pathname && pathname !== "/login" ? pathname : "/dashboard";
-    router.replace(`/login?next=${encodeURIComponent(next)}`);
+    let cancelled = false;
+
+    restoreInFlightRef.current = true;
+    setIsCheckingSession(true);
+    hasAttemptedRestoreRef.current = true;
+
+    void restoreSession().then((session) => {
+      if (cancelled) {
+        return;
+      }
+
+      restoreInFlightRef.current = false;
+      setIsCheckingSession(false);
+
+      if (session?.user) {
+        return;
+      }
+
+      const query = typeof window !== "undefined" ? window.location.search : "";
+      const next =
+        pathname && pathname !== "/login" ? `${pathname}${query}` : "/dashboard";
+      router.replace(`/login?next=${encodeURIComponent(next)}`);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [hasHydrated, user, pathname, router]);
 
-  if (!hasHydrated || !user) {
+  if (!hasHydrated || isCheckingSession || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <Loader2

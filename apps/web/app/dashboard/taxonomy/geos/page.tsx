@@ -1,5 +1,5 @@
-import { TaxonomyTablePage } from "../../../../components/dashboard/taxonomy/taxonomy-table-page";
+import { GeosLocalesTablePage } from "../../../../components/dashboard/taxonomy/geos-locales-table-page";
 
 export default function GeosPage() {
-  return <TaxonomyTablePage kind="geos" />;
+  return <GeosLocalesTablePage />;
 }

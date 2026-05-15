@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev --port 3002",
     "build": "next build",
+    "start": "next start --port 3002",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests"
@@ -39,6 +40,7 @@
     "grapesjs": "^0.22.14",
     "grapesjs-blocks-basic": "^1.0.2",
     "grapesjs-preset-webpage": "^1.0.3",
+    "js-beautify": "^1.15.4",
     "lucide-react": "^0.552.0",
     "monaco-editor": "^0.55.1",
     "monaco-tailwindcss": "^0.6.1",
@@ -50,6 +52,7 @@
     "react": "^19.0.0",
     "react-arborist": "^3.5.0",
     "react-dom": "^19.0.0",
+    "react-email-editor": "^1.8.0",
     "react-hook-form": "^7.75.0",
     "sonner": "^1.7.1",
     "zod": "^4.4.3",

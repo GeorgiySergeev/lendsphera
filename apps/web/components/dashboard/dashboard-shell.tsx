@@ -61,22 +61,25 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div 
+      <div
         className={cn(
           "hidden lg:fixed lg:inset-y-0 lg:flex transition-all duration-300 z-40",
           isCollapsed ? "w-16" : "w-64"
         )}
       >
-        <DashboardSidebar isCollapsed={isCollapsed} onToggleCollapse={() => setIsCollapsed(!isCollapsed)} />
+        <DashboardSidebar
+          isCollapsed={isCollapsed}
+          onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
+        />
       </div>
-      <div 
+      <div
         className={cn(
           "flex min-h-screen flex-col transition-all duration-300",
           isCollapsed ? "lg:pl-16" : "lg:pl-64"
         )}
       >
         <DashboardTopBar onOpenMobileNav={() => setOpen(true)} />
-        <main className="flex-1 px-4 py-5 sm:px-6 lg:px-8">
+        <main className="flex-1 px-4 py-0 sm:px-6 lg:px-8">
           <div className="w-full max-w-none">{children}</div>
         </main>
       </div>
@@ -98,11 +101,11 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function DashboardSidebar({ 
+function DashboardSidebar({
   onNavigate,
   isCollapsed = false,
   onToggleCollapse
-}: { 
+}: {
   onNavigate?: () => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -127,14 +130,18 @@ function DashboardSidebar({
           </Link>
         )}
         {onToggleCollapse && (
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={onToggleCollapse} 
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onToggleCollapse}
             className={cn("h-8 w-8 shrink-0", isCollapsed ? "mx-auto" : "ml-auto")}
             aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            {isCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            {isCollapsed ? (
+              <PanelLeftOpen className="h-4 w-4" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4" />
+            )}
           </Button>
         )}
       </SidebarHeader>
@@ -153,9 +160,19 @@ function DashboardSidebar({
                 <SidebarMenuItem key={item.href}>
                   <Tooltip delayDuration={0}>
                     <TooltipTrigger asChild>
-                      <SidebarMenuButton asChild isActive={isActive} className={cn(isCollapsed && "justify-center px-0")}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive}
+                        className={cn(isCollapsed && "justify-center px-0")}
+                      >
                         <Link href={item.href} onClick={onNavigate}>
-                          <Icon className={cn("shrink-0", isCollapsed ? "h-5 w-5" : "h-4 w-4")} aria-hidden="true" />
+                          <Icon
+                            className={cn(
+                              "shrink-0",
+                              isCollapsed ? "h-5 w-5" : "h-4 w-4"
+                            )}
+                            aria-hidden="true"
+                          />
                           {!isCollapsed && <span className="truncate">{item.title}</span>}
                           {!isCollapsed && item.badge ? (
                             <SidebarMenuBadge>{item.badge}</SidebarMenuBadge>
@@ -163,7 +180,9 @@ function DashboardSidebar({
                         </Link>
                       </SidebarMenuButton>
                     </TooltipTrigger>
-                    {isCollapsed && <TooltipContent side="right">{item.title}</TooltipContent>}
+                    {isCollapsed && (
+                      <TooltipContent side="right">{item.title}</TooltipContent>
+                    )}
                   </Tooltip>
                 </SidebarMenuItem>
               );
@@ -183,14 +202,21 @@ function DashboardSidebar({
         )}
       </SidebarContent>
       <SidebarFooter>
-        <div className={cn("flex items-center rounded-md px-2 py-2", isCollapsed ? "justify-center" : "gap-3")}>
+        <div
+          className={cn(
+            "flex items-center rounded-md px-2 py-2",
+            isCollapsed ? "justify-center" : "gap-3"
+          )}
+        >
           <Avatar className={cn("shrink-0", isCollapsed ? "h-8 w-8" : "h-9 w-9")}>
             <AvatarFallback>AD</AvatarFallback>
           </Avatar>
           {!isCollapsed && (
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">Admin Desk</p>
-              <p className="truncate text-xs text-sidebar-foreground/55">Owner workspace</p>
+              <p className="truncate text-xs text-sidebar-foreground/55">
+                Owner workspace
+              </p>
             </div>
           )}
         </div>

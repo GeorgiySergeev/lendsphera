@@ -1,6 +1,8 @@
 import { z } from "zod";
 
 export * from "./components";
+export * from "./builder";
+export * from "./widget-registry";
 
 export const WidgetSchema = z.object({
   id: z.string().min(1),

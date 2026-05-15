@@ -12,7 +12,8 @@ import {
 
 const sections = [
   {
-    description: "Locales, currencies, flags, timezones, and GEO ordering.",
+    description:
+      "Browse ISO locales from locales.json (paginated). Reorder and CSV import live under Catalog tools.",
     href: "/dashboard/taxonomy/geos",
     icon: Flag,
     title: "GEOs"

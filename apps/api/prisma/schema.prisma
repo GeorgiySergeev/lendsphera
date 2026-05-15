@@ -29,10 +29,12 @@ model User {
   componentAuthored Component[]  @relation("ComponentAuthor")
   oauthAccounts     OAuthAccount[]
   ownedLandings     Landing[]    @relation("LandingOwner")
+  builderPages      BuilderPage[] @relation("BuilderPageOwner")
   publishJobs       PublishJob[]
   sessions          Session[]
   templateAuthored  Template[]   @relation("TemplateAuthor")
   versions          Version[]
+  builderVersions   BuilderPageVersion[] @relation("BuilderPageAuthor")
   widgetAuthored    Widget[]     @relation("WidgetAuthor")
 
   @@index([role])
@@ -266,6 +268,54 @@ model PublishJob {
 
   @@index([landingId, createdAt])
   @@index([status])
+}
+
+model BuilderPage {
+  id               String               @id @default(cuid())
+  name             String
+  status           BuilderPageStatus    @default(DRAFT)
+  ownerId          String
+  currentVersionId String?              @unique
+  html             String?
+  css              String?
+  components       Json?
+  styles           Json?
+  assets           Json?
+  design           Json?
+  device           String?              @db.VarChar(16)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  deletedAt        DateTime?
+  owner            User                 @relation("BuilderPageOwner", fields: [ownerId], references: [id])
+  currentVersion   BuilderPageVersion?  @relation("CurrentBuilderPageVersion", fields: [currentVersionId], references: [id])
+  versions         BuilderPageVersion[] @relation("AllBuilderPageVersions")
+
+  @@index([ownerId, updatedAt])
+  @@index([status, deletedAt])
+}
+
+model BuilderPageVersion {
+  id            String               @id @default(cuid())
+  builderPageId String
+  versionNum    Int
+  status        BuilderVersionStatus @default(AUTOSAVE)
+  html          String?
+  css           String?
+  components    Json?
+  styles        Json?
+  assets        Json?
+  design        Json?
+  device        String?              @db.VarChar(16)
+  message       String?
+  authorId      String
+  createdAt     DateTime             @default(now())
+  currentOf     BuilderPage?         @relation("CurrentBuilderPageVersion")
+  page          BuilderPage          @relation("AllBuilderPageVersions", fields: [builderPageId], references: [id], onDelete: Cascade)
+  author        User                 @relation("BuilderPageAuthor", fields: [authorId], references: [id])
+
+  @@unique([builderPageId, versionNum])
+  @@index([builderPageId, createdAt])
+  @@index([authorId])
 }
 
 model Widget {
@@ -564,6 +614,18 @@ enum PublishJobStatus {
   SUCCESS
   FAILED
   CANCELLED
+}
+
+enum BuilderPageStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum BuilderVersionStatus {
+  AUTOSAVE
+  MANUAL
+  PUBLISHED
 }
 
 enum PlaceholderType {

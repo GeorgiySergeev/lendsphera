@@ -7,14 +7,19 @@ import type { PlaceholderSchema, PlaceholderValue } from "@workspace/types";
 import {
   parseWidgetProps,
   serializeWidgetProps,
-  widgetSchemas
+  widgetSchemas,
+  type WidgetSchemaField
 } from "@workspace/widgets";
 import {
+  AlertCircle,
   CheckCircle2,
   ChevronDown,
   Code2,
+  Download,
   Eye,
+  Expand,
   LayoutGrid,
+  Blocks,
   Layers3,
   Monitor,
   Paintbrush,
@@ -25,6 +30,9 @@ import {
   Settings2,
   Smartphone,
   Tablet,
+  Trash2,
+  Undo2,
+  Redo2,
   Upload,
   X
 } from "lucide-react";
@@ -70,6 +78,7 @@ import {
   renderPlaceholderTemplate
 } from "../../lib/editor/placeholders";
 import { ensureLandingRoot, processCustomCss } from "../../lib/editor/custom-css";
+import { devicePreviewWidths, type Device } from "./device-preview";
 import { GrapesCanvas } from "./landing-grapes-canvas";
 import { KeyboardShortcutsPanel } from "./keyboard-shortcuts-panel";
 import { LandingCodePanel } from "./landing-code-panel";
@@ -77,8 +86,7 @@ import { PlaceholderContentPanel } from "./placeholder-content-panel";
 import { WidgetConfigPanel } from "./widget-config-panel";
 import { PublishModal } from "./publish-modal";
 import { ComponentsPanel } from "./components-panel";
-
-type Device = "mobile" | "tablet" | "desktop";
+import { WidgetsPanel } from "./widgets-panel";
 
 type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "unavailable" | "error";
 
@@ -92,12 +100,6 @@ type GrapesComponent = {
 };
 
 const deviceStorageKey = "landing-editor-device";
-const devicePreviewWidths: Record<Device, number> = {
-  desktop: 1440,
-  mobile: 375,
-  tablet: 768
-};
-
 const devices: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
@@ -110,6 +112,7 @@ const devices: {
 
 const leftTabs = [
   { id: "components", label: "Components", icon: LayoutGrid },
+  { id: "widgets", label: "Widgets", icon: Blocks },
   { id: "blocks", label: "Blocks", icon: PanelLeft },
   { id: "layers", label: "Layers", icon: Layers3 },
   { id: "assets", label: "Assets", icon: Upload }
@@ -132,6 +135,36 @@ type GrapesEditor = Editor & {
   getSelected: () => unknown;
 };
 
+type CanvasToolAction = {
+  command: string;
+  destructive?: boolean;
+  icon: React.ComponentType<{ className?: string }>;
+  id: string;
+  label: string;
+};
+
+const canvasToolActions: CanvasToolAction[] = [
+  { id: "visibility", label: "Toggle outlines", command: "sw-visibility", icon: Layers3 },
+  { id: "preview", label: "Preview", command: "preview", icon: Eye },
+  { id: "fullscreen", label: "Fullscreen", command: "fullscreen", icon: Expand },
+  { id: "code", label: "View code", command: "export-template", icon: Code2 },
+  { id: "undo", label: "Undo", command: "core:undo", icon: Undo2 },
+  { id: "redo", label: "Redo", command: "core:redo", icon: Redo2 },
+  {
+    id: "import",
+    label: "Import HTML",
+    command: "gjs-open-import-webpage",
+    icon: Download
+  },
+  {
+    id: "clear",
+    label: "Clear canvas",
+    command: "canvas-clear",
+    icon: Trash2,
+    destructive: true
+  }
+];
+
 function LandingEditorShell({ landingId }: LandingEditorShellProps) {
   const editorRef = React.useRef<GrapesEditor | null>(null);
   const lastSavedRef = React.useRef<string>("");
@@ -153,6 +186,7 @@ function LandingEditorShell({ landingId }: LandingEditorShellProps) {
     component: GrapesComponent;
     props: Record<string, unknown>;
     slug: string;
+    fields: WidgetSchemaField[];
   } | null>(null);
   const [lockStatus, setLockStatus] = React.useState<
     "acquiring" | "locked" | "lost" | "error" | null
@@ -471,6 +505,10 @@ function LandingEditorShell({ landingId }: LandingEditorShellProps) {
     editorRef.current?.setDevice(nextDevice);
   };
 
+  const handleCanvasToolCommand = React.useCallback((command: string) => {
+    editorRef.current?.runCommand(command);
+  }, []);
+
   const handlePlaceholderChange = (key: string, value: PlaceholderValue[string]) => {
     setPlaceholderValues((current) => ({ ...current, [key]: value }));
     setSaveStatus((current) => (current === "saving" ? current : "dirty"));
@@ -508,12 +546,49 @@ function LandingEditorShell({ landingId }: LandingEditorShellProps) {
     );
   }
 
+  if (documentQuery.isError || !documentQuery.data) {
+    const isUnauthorized = (documentQuery.error as any)?.response?.status === 401;
+
+    return (
+      <div className="flex min-h-[calc(100vh-2rem)] items-center justify-center rounded-xl border bg-destructive/10 p-8 text-center text-destructive shadow-sm">
+        <div className="max-w-md space-y-4">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-destructive/20">
+            <AlertCircle className="h-6 w-6" />
+          </div>
+          <h2 className="text-lg font-semibold italic">
+            {isUnauthorized ? "Session Expired" : "Failed to load editor"}
+          </h2>
+          <p className="text-sm">
+            {isUnauthorized
+              ? "Your session has expired or you are not authorized to edit this landing page. Please try logging in again."
+              : "The landing page document could not be retrieved from the server. It may have been deleted or you might not have permission to edit it."}
+          </p>
+          <Button
+            onClick={() => {
+              if (isUnauthorized) {
+                window.location.href = "/login";
+              } else {
+                window.location.reload();
+              }
+            }}
+            variant="outline"
+          >
+            {isUnauthorized ? "Go to Login" : "Retry"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-xl border bg-background shadow-sm">
+    <div className="flex h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-xl border bg-background shadow-sm">
       <EditorTopBar
+        canRunCanvasTools={Boolean(editorRef.current)}
+        canvasTools={canvasToolActions}
         device={device}
         isPublishing={isPublishModalOpen}
         lastSavedAt={lastSavedAt}
+        onCanvasToolCommand={handleCanvasToolCommand}
         onDeviceChange={handleDeviceChange}
         onManualSave={handleManualSave}
         onPublish={() => setIsPublishModalOpen(true)}
@@ -542,26 +617,40 @@ function LandingEditorShell({ landingId }: LandingEditorShellProps) {
             >
               {editorRef.current && <ComponentsPanel editor={editorRef.current} />}
             </div>
-            <div className={cn(activeLeftTab !== "blocks" && "hidden")} id="gjs-blocks" />
+            <div
+              className={cn(
+                activeLeftTab !== "widgets" && "hidden",
+                "h-full w-full overflow-hidden"
+              )}
+            >
+              {editorRef.current && <WidgetsPanel editor={editorRef.current} />}
+            </div>
+            <div
+              className={cn(activeLeftTab !== "blocks" && "hidden", "w-full min-w-0")}
+              id="gjs-blocks"
+            />
             <div className={cn(activeLeftTab !== "layers" && "hidden")} id="gjs-layers" />
             <div className={cn(activeLeftTab !== "assets" && "hidden")} id="gjs-assets" />
             {documentQuery.isLoading ? <Skeleton className="mt-4 h-24 w-full" /> : null}
           </EditorPanel>
         </ResizablePanel>
         <ResizableHandle withHandle className="hidden lg:flex" />
-        <ResizablePanel defaultSize={60} minSize={30}>
-          <main className="h-full min-w-0 overflow-x-auto bg-muted/40 p-4">
-            <Card className="flex h-full justify-center overflow-hidden border-dashed bg-background/95">
-              <CardContent className="h-full p-0">
+        <ResizablePanel defaultSize={60} minSize={30} className="min-w-0">
+          <main className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-x-auto bg-muted/40 p-4">
+            <Card className="flex h-full min-h-0 w-full min-w-0 flex-1 justify-center overflow-x-auto overflow-y-hidden border-dashed bg-background/95">
+              <CardContent className="flex h-full min-h-0 min-w-full justify-center p-0">
                 <motion.div
                   animate={{ width: devicePreviewWidths[device] }}
-                  className="h-full max-w-full overflow-hidden"
+                  className={cn(
+                    "h-full overflow-hidden",
+                    device === "desktop" ? "w-full min-w-0 max-w-full" : "shrink-0"
+                  )}
                   initial={false}
                   transition={{ duration: 0.28, ease: "easeInOut" }}
                 >
                   <GrapesCanvas
                     device={device}
-                    document={documentQuery.data}
+                    initialDoc={documentQuery.data}
                     onEditorReady={handleEditorReady}
                   />
                 </motion.div>
@@ -591,13 +680,9 @@ function LandingEditorShell({ landingId }: LandingEditorShellProps) {
             </div>
             <div className={cn(activeRightTab !== "style" && "hidden")} id="gjs-styles" />
             <div className={cn(activeRightTab !== "advanced" && "hidden")}>
+              <div id="gjs-traits" className="mb-4" />
               <WidgetConfigPanel
-                fields={
-                  selectedWidget
-                    ? (widgetSchemas[selectedWidget.slug as keyof typeof widgetSchemas]
-                        ?.fields ?? [])
-                    : []
-                }
+                fields={selectedWidget?.fields ?? []}
                 onChange={handleWidgetConfigChange}
                 props={selectedWidget?.props ?? {}}
                 widgetName={selectedWidget?.slug ?? null}
@@ -628,9 +713,12 @@ function LandingEditorShell({ landingId }: LandingEditorShellProps) {
 }
 
 function EditorTopBar({
+  canRunCanvasTools,
+  canvasTools,
   device,
   isPublishing,
   lastSavedAt,
+  onCanvasToolCommand,
   onDeviceChange,
   onManualSave,
   onPublish,
@@ -638,9 +726,12 @@ function EditorTopBar({
   title,
   versions
 }: {
+  canRunCanvasTools: boolean;
+  canvasTools: CanvasToolAction[];
   device: Device;
   isPublishing: boolean;
   lastSavedAt: Date | null;
+  onCanvasToolCommand: (command: string) => void;
   onDeviceChange: (device: Device) => void;
   onManualSave: () => void;
   onPublish: () => void;
@@ -683,6 +774,35 @@ function EditorTopBar({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <TooltipProvider delayDuration={150}>
+          <div className="flex items-center gap-1 rounded-md border bg-background p-1">
+            {canvasTools.map((tool) => {
+              const Icon = tool.icon;
+
+              return (
+                <Tooltip key={tool.id}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      aria-label={tool.label}
+                      className={cn(
+                        "h-8 w-8 px-0",
+                        tool.destructive && "text-destructive hover:text-destructive"
+                      )}
+                      disabled={!canRunCanvasTools}
+                      onClick={() => onCanvasToolCommand(tool.command)}
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <Icon className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{tool.label}</TooltipContent>
+                </Tooltip>
+              );
+            })}
+          </div>
+        </TooltipProvider>
         <div
           className="flex rounded-md border bg-background p-1"
           aria-label="Device preview"
@@ -897,6 +1017,38 @@ function getStoredDevice(): Device {
   return isDevice(stored) ? stored : "desktop";
 }
 
+function parseWidgetSchemaAttr(raw: unknown): WidgetSchemaField[] {
+  if (typeof raw !== "string" || !raw.length) {
+    return [];
+  }
+
+  const candidates = [raw];
+
+  try {
+    candidates.push(decodeURIComponent(raw));
+  } catch {
+    // raw may already be decoded
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate) as unknown;
+
+      if (parsed && typeof parsed === "object" && "fields" in parsed) {
+        const fields = (parsed as { fields?: unknown }).fields;
+
+        if (Array.isArray(fields)) {
+          return fields as WidgetSchemaField[];
+        }
+      }
+    } catch {
+      // try next candidate
+    }
+  }
+
+  return [];
+}
+
 function readSelectedWidget(component: GrapesComponent | null) {
   if (!component) {
     return null;
@@ -905,7 +1057,17 @@ function readSelectedWidget(component: GrapesComponent | null) {
   const attributes = component.getAttributes();
   const slug = attributes["data-widget"];
 
-  if (typeof slug !== "string" || !(slug in widgetSchemas)) {
+  if (typeof slug !== "string" || !slug.length) {
+    return null;
+  }
+
+  const bundleUrlAttr = attributes["data-widget-bundle-url"];
+  const hasBundleUrl = typeof bundleUrlAttr === "string" && bundleUrlAttr.length > 0;
+  const inlineFields = parseWidgetSchemaAttr(attributes["data-widget-schema"]);
+  const packageSchema = widgetSchemas[slug as keyof typeof widgetSchemas];
+  const fields = inlineFields.length > 0 ? inlineFields : (packageSchema?.fields ?? []);
+
+  if (fields.length === 0 && !packageSchema && !hasBundleUrl) {
     return null;
   }
 
@@ -916,7 +1078,8 @@ function readSelectedWidget(component: GrapesComponent | null) {
         ? attributes["data-widget-props"]
         : null
     ),
-    slug
+    slug,
+    fields
   };
 }
 

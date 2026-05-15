@@ -1,6 +1,7 @@
 "use client";
 
-import { Blocks, Plus, SearchX } from "lucide-react";
+import type { ReactNode } from "react";
+import { Blocks, Pin, Plus, Pencil, SearchX } from "lucide-react";
 
 import {
   Badge,
@@ -18,6 +19,7 @@ import { ComponentCard } from "./ComponentCard";
 import { ComponentCardSkeleton } from "./ComponentCardSkeleton";
 import type { ViewMode } from "./ComponentsFiltersBar";
 import { buildCardPreviewHtml } from "./preview-html";
+import { ComponentCategoryIcon } from "./ComponentCategoryIcon";
 
 type ComponentGridProps = {
   components: ComponentListItem[];
@@ -90,6 +92,9 @@ function ComponentGrid({
     <div className="space-y-8">
       {pinned.length ? (
         <ComponentSection
+          leading={
+            <Pin className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          }
           title="Pinned"
           count={pinned.length}
           components={pinned}
@@ -100,7 +105,14 @@ function ComponentGrid({
       {sections.map((section) => (
         <ComponentSection
           key={section.categoryId}
-          title={`${section.icon ? `${section.icon} ` : ""}${section.name}`}
+          leading={
+            <ComponentCategoryIcon
+              slug={section.slug}
+              icon={section.icon}
+              className="text-muted-foreground"
+            />
+          }
+          title={section.name}
           count={section.components.length}
           components={section.components}
           onOpenPreview={onOpenPreview}
@@ -112,12 +124,14 @@ function ComponentGrid({
 }
 
 function ComponentSection({
+  leading,
   title,
   count,
   components,
   onOpenPreview,
   onOpenEditor
 }: {
+  leading?: ReactNode;
   title: string;
   count: number;
   components: ComponentListItem[];
@@ -127,6 +141,7 @@ function ComponentSection({
   return (
     <section className="space-y-4">
       <div className="flex items-center gap-3">
+        {leading ? <span className="flex shrink-0 items-center">{leading}</span> : null}
         <h2 className="text-sm font-semibold">{title}</h2>
         <Badge variant="secondary">{count}</Badge>
         <div className="h-px flex-1 bg-border" />
@@ -214,7 +229,11 @@ function ComponentsList({
               </TableCell>
               <TableCell>
                 <span className="inline-flex items-center gap-2 text-sm">
-                  <span aria-hidden="true">{component.category.icon ?? "□"}</span>
+                  <ComponentCategoryIcon
+                    slug={component.category.slug}
+                    icon={component.category.icon}
+                    className="text-muted-foreground"
+                  />
                   {component.category.name}
                 </span>
               </TableCell>
@@ -233,8 +252,10 @@ function ComponentsList({
                   type="button"
                   variant="outline"
                   size="sm"
+                  className="gap-1.5"
                   onClick={() => onOpenEditor(component.id)}
                 >
+                  <Pencil className="h-4 w-4" aria-hidden="true" />
                   Edit
                 </Button>
               </TableCell>
@@ -261,7 +282,9 @@ function EmptyState({
     <div className="flex min-h-96 flex-col items-center justify-center rounded-lg border border-dashed bg-muted/20 p-8 text-center">
       <Icon className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
       <h2 className="mt-4 text-lg font-semibold">
-        {hasSearch ? "No components match your search" : "No components in this category yet"}
+        {hasSearch
+          ? "No components match your search"
+          : "No components in this category yet"}
       </h2>
       <p className="mt-2 max-w-md text-sm text-muted-foreground">
         {hasSearch
@@ -288,6 +311,7 @@ function groupByCategory(components: ComponentListItem[]) {
     string,
     {
       categoryId: string;
+      slug: string;
       icon?: string;
       name: string;
       sortOrder: number;
@@ -305,6 +329,7 @@ function groupByCategory(components: ComponentListItem[]) {
 
     groups.set(component.category.id, {
       categoryId: component.category.id,
+      slug: component.category.slug,
       icon: component.category.icon,
       name: component.category.name,
       sortOrder: component.category.sortOrder,

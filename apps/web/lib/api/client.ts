@@ -22,6 +22,7 @@ type QueueEntry = {
 
 let isRefreshing = false;
 let failedQueue: QueueEntry[] = [];
+const REQUEST_TIMEOUT_MS = 10_000;
 
 function processQueue(error: unknown, token: string | null): void {
   for (const { resolve, reject } of failedQueue) {
@@ -38,8 +39,7 @@ function processQueue(error: unknown, token: string | null): void {
 // Axios instances
 // ────────────────────────────────────────────────────────────────
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 
 /**
  * Primary API client — attaches Bearer token from Zustand store
@@ -49,6 +49,7 @@ const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: { "Content-Type": "application/json" },
   withCredentials: true, // ✅ Send HttpOnly cookies on every request
+  timeout: REQUEST_TIMEOUT_MS
 });
 
 /**
@@ -59,6 +60,7 @@ const refreshClient = axios.create({
   baseURL: API_BASE_URL,
   headers: { "Content-Type": "application/json" },
   withCredentials: true, // ✅ Send refreshToken cookie
+  timeout: REQUEST_TIMEOUT_MS
 });
 
 // ────────────────────────────────────────────────────────────────
@@ -108,9 +110,7 @@ apiClient.interceptors.response.use(
 
     try {
       // refreshToken is sent automatically via HttpOnly cookie
-      const { data } = await refreshClient.post<{ accessToken: string }>(
-        "/auth/refresh",
-      );
+      const { data } = await refreshClient.post<{ accessToken: string }>("/auth/refresh");
 
       const { accessToken } = data;
       useAuthStore.getState().setAccessToken(accessToken);
@@ -134,7 +134,7 @@ apiClient.interceptors.response.use(
     } finally {
       isRefreshing = false;
     }
-  },
+  }
 );
 
-export { apiClient };
+export { apiClient, refreshClient };

@@ -12,6 +12,8 @@ import {
 } from "@workspace/ui";
 import type { ComponentCategory, ComponentListItem } from "@workspace/types";
 
+import { ComponentCategoryIcon } from "./ComponentCategoryIcon";
+
 type CategorySidebarProps = {
   categories: ComponentCategory[];
   components: ComponentListItem[];
@@ -29,10 +31,13 @@ function CategorySidebar({
   onCategoryChange,
   onTagToggle
 }: CategorySidebarProps) {
-  const categoryCounts = components.reduce<Record<string, number>>((counts, component) => {
-    counts[component.category.id] = (counts[component.category.id] ?? 0) + 1;
-    return counts;
-  }, {});
+  const categoryCounts = components.reduce<Record<string, number>>(
+    (counts, component) => {
+      counts[component.category.id] = (counts[component.category.id] ?? 0) + 1;
+      return counts;
+    },
+    {}
+  );
   const popularTags = getPopularTags(components);
 
   return (
@@ -48,7 +53,15 @@ function CategorySidebar({
           )}
         >
           <span>All</span>
-          <Badge variant="secondary">{components.length}</Badge>
+          <Badge
+            variant="outline"
+            className={cn(
+              "shrink-0 border-border/80 bg-transparent px-1.5 py-0 font-normal tabular-nums text-muted-foreground",
+              selectedCategory === null && "border-primary/35 text-primary"
+            )}
+          >
+            {components.length}
+          </Badge>
         </button>
 
         <div>
@@ -68,11 +81,21 @@ function CategorySidebar({
                     active && "border-primary bg-primary/10 font-semibold text-primary"
                   )}
                 >
-                  <span className="w-5 text-center" aria-hidden="true">
-                    {category.icon ?? "□"}
-                  </span>
+                  <ComponentCategoryIcon
+                    slug={category.slug}
+                    icon={category.icon}
+                    className="text-muted-foreground"
+                  />
                   <span className="min-w-0 flex-1 truncate">{category.name}</span>
-                  <Badge variant="secondary">{categoryCounts[category.id] ?? 0}</Badge>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "shrink-0 border-border/80 bg-transparent px-1.5 py-0 font-normal tabular-nums text-muted-foreground",
+                      active && "border-primary/35 text-primary"
+                    )}
+                  >
+                    {categoryCounts[category.id] ?? 0}
+                  </Badge>
                 </button>
               );
             })}
@@ -101,7 +124,11 @@ function CategorySidebar({
         <div className="mt-auto border-t pt-4">
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button type="button" variant="outline" className="w-full justify-start gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full justify-start gap-2"
+              >
                 <Download className="h-4 w-4" aria-hidden="true" />
                 Import components
               </Button>

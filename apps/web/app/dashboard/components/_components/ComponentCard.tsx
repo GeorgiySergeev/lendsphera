@@ -45,6 +45,7 @@ import { componentKeys } from "../../../../hooks/use-components";
 import { componentsApi } from "../../../../lib/api/components";
 import { toast } from "../../../../lib/toast";
 import { buildCardPreviewHtml } from "./preview-html";
+import { ComponentCategoryIcon } from "./ComponentCategoryIcon";
 
 type ComponentCardProps = {
   component: ComponentListItem;
@@ -92,7 +93,10 @@ function ComponentCard({ component, onOpenPreview, onOpenEditor }: ComponentCard
   };
 
   const addToEditor = () => {
-    toast.info("Open a landing first", "Components can be inserted from the landing editor.");
+    toast.info(
+      "Open a landing first",
+      "Components can be inserted from the landing editor."
+    );
   };
 
   return (
@@ -149,7 +153,11 @@ function ComponentCard({ component, onOpenPreview, onOpenEditor }: ComponentCard
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span aria-hidden="true">{component.category.icon ?? "□"}</span>
+              <ComponentCategoryIcon
+                slug={component.category.slug}
+                icon={component.category.icon}
+                className="text-muted-foreground"
+              />
               <h3 className="truncate text-sm font-semibold">{component.name}</h3>
             </div>
             {component.description ? (

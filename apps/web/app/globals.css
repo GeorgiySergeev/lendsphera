@@ -9,14 +9,32 @@
 #gjs-blocks {
   container-type: inline-size;
   width: 100%;
+  height: 100%;
   overflow: hidden;
+  background: hsl(var(--background));
 }
 
 #gjs-blocks .gjs-block-categories {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  height: 100%;
+  align-content: start;
   width: 100%;
+}
+
+#gjs-blocks .gjs-one-bg,
+#gjs-blocks .gjs-two-bg,
+#gjs-blocks .gjs-three-bg,
+#gjs-blocks .gjs-four-bg {
+  background: transparent !important;
+}
+
+#gjs-blocks .gjs-one-color,
+#gjs-blocks .gjs-two-color,
+#gjs-blocks .gjs-three-color,
+#gjs-blocks .gjs-four-color {
+  color: hsl(var(--foreground)) !important;
 }
 
 /* ── Category accordion ── */
@@ -33,9 +51,11 @@
   border-color: hsl(var(--border) / 0.8);
 }
 
-/* Category header (toggle) */
+/* Category header (toggle). DOM order is caret then label; row-reverse + space-between puts caret on the right. */
 #gjs-blocks .gjs-block-category .gjs-title {
   display: flex;
+  flex-direction: row-reverse;
+  justify-content: space-between;
   align-items: center;
   gap: 8px;
   width: 100%;
@@ -59,7 +79,7 @@
   color: hsl(var(--accent-foreground));
 }
 
-/* Caret icon — rotate on open */
+/* Caret — GrapesJS swaps fa-caret-right / fa-caret-down in JS; do not add transform here (it breaks the stock icon swap). */
 #gjs-blocks .gjs-block-category .gjs-caret-icon {
   display: inline-flex;
   align-items: center;
@@ -67,7 +87,6 @@
   width: 16px;
   height: 16px;
   flex-shrink: 0;
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   color: hsl(var(--muted-foreground));
   font-size: 10px;
 }
@@ -77,23 +96,48 @@
   border-bottom-color: hsl(var(--border));
 }
 
-#gjs-blocks .gjs-block-category.gjs-open .gjs-caret-icon {
-  transform: rotate(90deg);
+/* ── Blocks module root ($el) ──
+   GrapesJS render() does: $el.addClass(blockContClass + "s" + one-bg + two-color) → `.gjs-blocks-cs`.
+   That element wraps `.gjs-block-categories` + `.gjs-blocks-no-cat`; it must NOT be a block grid
+   or those two sections become grid items and collapse to one ~80px track in narrow panels. */
+#gjs-blocks .gjs-blocks-cs {
+  display: flex !important;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100% !important;
+  min-width: 0;
+  box-sizing: border-box;
+  background: transparent !important;
+  padding: 0;
 }
 
-/* ── Block grid ── */
-#gjs-blocks .gjs-blocks-cs {
+#gjs-blocks .gjs-blocks-no-cat {
+  width: 100% !important;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* ── Block grid (inner list only)
+   - Uncategorized: `.gjs-blocks-no-cat > .gjs-blocks-c`
+   - Per category: `getTypeEl()` → `.gjs-{categoryId}s-c` (e.g. `.gjs-basics-c`), NOT always `.gjs-blocks-c`
+   Do not use `display: … !important` here: GrapesJS toggles open/close via inline `style.display` on that node. */
+#gjs-blocks .gjs-blocks-no-cat > .gjs-blocks-c,
+#gjs-blocks .gjs-block-category > div:not([data-title]) {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
   gap: 6px;
   padding: 8px;
-  width: 100%;
+  align-content: start;
+  background: transparent !important;
+  width: 100% !important;
+  min-width: 0;
   box-sizing: border-box;
 }
 
 /* Responsive grid breakpoints via container queries */
 @container (max-width: 180px) {
-  #gjs-blocks .gjs-blocks-cs {
+  #gjs-blocks .gjs-blocks-no-cat > .gjs-blocks-c,
+  #gjs-blocks .gjs-block-category > div:not([data-title]) {
     grid-template-columns: 1fr;
     gap: 4px;
     padding: 6px;
@@ -101,7 +145,8 @@
 }
 
 @container (min-width: 320px) {
-  #gjs-blocks .gjs-blocks-cs {
+  #gjs-blocks .gjs-blocks-no-cat > .gjs-blocks-c,
+  #gjs-blocks .gjs-block-category > div:not([data-title]) {
     grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
     gap: 8px;
     padding: 10px;
@@ -109,7 +154,8 @@
 }
 
 @container (min-width: 480px) {
-  #gjs-blocks .gjs-blocks-cs {
+  #gjs-blocks .gjs-blocks-no-cat > .gjs-blocks-c,
+  #gjs-blocks .gjs-block-category > div:not([data-title]) {
     grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
     gap: 10px;
   }
@@ -137,6 +183,10 @@
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 1px 2px hsl(var(--foreground) / 0.04);
   overflow: hidden;
+}
+
+#gjs-blocks .gjs-block-category .gjs-block {
+  min-height: 92px !important;
 }
 
 #gjs-blocks .gjs-block:hover {
@@ -174,6 +224,16 @@
   flex-shrink: 0;
   color: hsl(var(--muted-foreground));
   transition: color 0.2s ease;
+}
+
+/* Outline-only block glyphs — strip default `fill` (lucide/stroke style). */
+#gjs-blocks .gjs-block__media svg,
+#gjs-blocks .gjs-block__media svg * {
+  fill: none !important;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 #gjs-blocks .gjs-block:hover svg {
@@ -230,7 +290,8 @@
   width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
   font-weight: 500;
   line-height: 1.3;
 }
@@ -250,3 +311,45 @@
   width: 100%;
 }
 
+/* Landing editor canvas - GrapesJS dock reset for the embedded editor shell. */
+.landing-grapes-editor {
+  --gjs-left-width: 0;
+  --gjs-canvas-top: 0;
+  height: 100%;
+  outline: none;
+}
+
+.landing-grapes-editor .gjs-editor {
+  height: 100%;
+  background: transparent;
+}
+
+.landing-grapes-editor .gjs-cv-canvas {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #fff;
+}
+
+.landing-grapes-editor .gjs-cv-canvas__frames {
+  width: 100%;
+  height: 100%;
+}
+
+.landing-grapes-editor iframe.gjs-frame {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+/* Builder email editor - stretch both internal react-email-editor wrappers. */
+.builder-email-editor-shell {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+}
+
+.builder-email-editor-shell > div,
+.builder-email-editor-shell > div > div {
+  height: 100% !important;
+  min-height: 0 !important;
+}

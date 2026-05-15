@@ -36,8 +36,8 @@ function LandingCodePanel({
   onCustomCssChange
 }: LandingCodePanelProps) {
   const [activeTab, setActiveTab] = React.useState<CodePanelTab>("html");
-  const handleMount = React.useCallback<OnMount>((_editor, monaco) => {
-    void setupTailwindIntelliSense(monaco);
+  const handleMount = React.useCallback<OnMount>(() => {
+    void setupTailwindIntelliSense();
   }, []);
 
   return (
@@ -120,20 +120,10 @@ function LandingCodePanel({
   );
 }
 
-async function setupTailwindIntelliSense(monaco: unknown) {
-  try {
-    const tailwindModule = await import("monaco-tailwindcss");
-    const candidates = Object.values(tailwindModule) as unknown[];
-
-    for (const candidate of candidates) {
-      if (typeof candidate === "function") {
-        candidate(monaco);
-        return;
-      }
-    }
-  } catch {
-    return;
-  }
+async function setupTailwindIntelliSense() {
+  // TEMPORARILY DISABLED: The 'monaco-tailwindcss' plugin requires a web worker setup
+  // that is currently not working in this environment, causing 'Missing requestHandler' errors.
+  console.warn("Tailwind IntelliSense is disabled to prevent Monaco editor crashes.");
 }
 
 export { LandingCodePanel };

@@ -32,7 +32,12 @@ function WidgetRuntimeLoader() {
           continue;
         }
 
-        const widget = await loadWidget(slug, element.dataset.widgetVersion);
+        const explicitBundle = decodeOptionalBundleUrl(element.dataset.widgetBundleUrl);
+        const widget = await loadWidget(
+          slug,
+          element.dataset.widgetVersion,
+          explicitBundle
+        );
 
         if (cancelled || !widget) {
           continue;
@@ -67,14 +72,28 @@ function WidgetRuntimeLoader() {
   return null;
 }
 
-async function loadWidget(slug: string, version?: string) {
+function decodeOptionalBundleUrl(raw: string | undefined): string | undefined {
+  if (!raw) {
+    return undefined;
+  }
+
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+async function loadWidget(slug: string, version?: string, explicitBundleUrl?: string) {
   const localWidget = widgetRegistry[slug as keyof typeof widgetRegistry];
 
   if (localWidget) {
     return localWidget;
   }
 
-  const bundleUrl = resolveBundleUrl(slug, version);
+  const trimmed = explicitBundleUrl?.trim();
+  const bundleUrl =
+    trimmed && trimmed.length > 0 ? trimmed : resolveBundleUrl(slug, version);
 
   if (!bundleUrl) {
     return null;

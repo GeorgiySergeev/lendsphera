@@ -34,6 +34,9 @@ export const geoListQuerySchema = paginationSchema.extend({
   language: z.string().optional()
 });
 
+/** Paginated read of static `locales.json` (locale × country reference rows). */
+export const geoLocalesListQuerySchema = paginationSchema;
+
 export const reorderGeosSchema = z.object({
   ids: z.array(z.string().min(1)).min(1)
 });
@@ -43,6 +46,7 @@ export const importGeosSchema = z.object({
 });
 
 export class GeoListQueryDto extends createZodDto(geoListQuerySchema) {}
+export class GeoLocalesListQueryDto extends createZodDto(geoLocalesListQuerySchema) {}
 export class CreateGeoDto extends createZodDto(geoBaseSchema) {}
 export class UpdateGeoDto extends createZodDto(geoBaseSchema.partial()) {}
 export class ReorderGeosDto extends createZodDto(reorderGeosSchema) {}

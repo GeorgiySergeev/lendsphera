@@ -3,14 +3,18 @@ import { APP_GUARD } from "@nestjs/core";
 import { ThrottlerModule, seconds } from "@nestjs/throttler";
 
 import { AssetsModule } from "./assets/assets.module";
+import { BuilderModule } from "./builder/builder.module";
 import { AuditModule } from "./audit/audit.module";
 import { AuthModule } from "./auth/auth.module";
 import { CategoriesModule } from "./categories/categories.module";
 import { ComponentsModule } from "./components/components.module";
+import { DownloadModule } from "./download/download.module";
 import { GeosModule } from "./geos/geos.module";
 import { HealthController } from "./health/health.controller";
 import { LandingsModule } from "./landings/landings.module";
 import { LegacyModule } from "./legacy/legacy.module";
+import { LocalizationModule } from "./localization/localization.module";
+import { MediaModule } from "./media/media.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { RedisModule } from "./redis/redis.module";
 import { TemplatesModule } from "./templates/templates.module";
@@ -56,6 +60,10 @@ import { CustomThrottlerGuard } from "./common/custom-throttler.guard";
     VariantsModule,
     TemplatesModule,
     LandingsModule,
+    BuilderModule,
+    DownloadModule,
+    LocalizationModule,
+    MediaModule,
     VersionsModule,
     WidgetsModule,
     AssetsModule,

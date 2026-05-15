@@ -17,7 +17,8 @@ import {
   MoreHorizontal,
   Search,
   Settings,
-  Trash2
+  Trash2,
+  Wrench
 } from "lucide-react";
 import Link from "next/link";
 import { parseAsInteger, parseAsString, useQueryStates } from "nuqs";
@@ -82,6 +83,7 @@ import {
   type LandingRow,
   type LandingStatus
 } from "../../lib/api/landings";
+import { useBuilderPages } from "../../hooks/use-builder";
 import { CreateLandingWizard } from "./create-landing-wizard";
 
 const queryKeys = {
@@ -122,6 +124,7 @@ function LandingsTablePage() {
     queryKey: queryKeys.list(apiFilters),
     queryFn: () => fetchLandings(apiFilters)
   });
+  const builderPagesQuery = useBuilderPages();
   const geosQuery = useQuery({
     queryKey: queryKeys.geos,
     queryFn: fetchGeoOptions
@@ -214,10 +217,10 @@ function LandingsTablePage() {
   const isBulkBusy = bulkDeleteMutation.isPending || bulkStatusMutation.isPending;
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-normal text-foreground">
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
             Landings
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -237,7 +240,7 @@ function LandingsTablePage() {
         </div>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto_auto_auto]">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
         <div className="relative min-w-0">
           <Search
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
@@ -251,44 +254,113 @@ function LandingsTablePage() {
             onChange={(event) => updateFilters({ search: event.target.value })}
           />
         </div>
-        <GeoMultiSelect
-          geos={geosQuery.data ?? []}
-          selectedCodes={selectedGeoCodes}
-          onChange={(codes) => updateFilters({ geo: codes.join(",") })}
-        />
-        <SingleFilter
-          label="Category"
-          value={filters.category}
-          options={categoriesQuery.data ?? []}
-          getValue={(item) => item.slug}
-          getLabel={(item) => item.name}
-          onChange={(value) => updateFilters({ category: value })}
-        />
-        <SingleFilter
-          label="Variant"
-          value={filters.variant}
-          options={variantsQuery.data ?? []}
-          getValue={(item) => item.slug}
-          getLabel={(item) => item.name}
-          onChange={(value) => updateFilters({ variant: value })}
-        />
-        <Select
-          value={filters.status}
-          onValueChange={(value) => updateFilters({ status: value })}
-        >
-          <SelectTrigger aria-label="Filter by status">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            {landingStatuses.map((status) => (
-              <SelectItem key={status} value={status}>
-                {formatStatus(status)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex flex-wrap items-center gap-2">
+          <GeoMultiSelect
+            geos={geosQuery.data ?? []}
+            selectedCodes={selectedGeoCodes}
+            onChange={(codes) => updateFilters({ geo: codes.join(",") })}
+          />
+          <SingleFilter
+            label="Category"
+            value={filters.category}
+            options={categoriesQuery.data ?? []}
+            getValue={(item) => item.slug}
+            getLabel={(item) => item.name}
+            onChange={(value) => updateFilters({ category: value })}
+          />
+          <SingleFilter
+            label="Variant"
+            value={filters.variant}
+            options={variantsQuery.data ?? []}
+            getValue={(item) => item.slug}
+            getLabel={(item) => item.name}
+            onChange={(value) => updateFilters({ variant: value })}
+          />
+          <Select
+            value={filters.status}
+            onValueChange={(value) => updateFilters({ status: value })}
+          >
+            <SelectTrigger aria-label="Filter by status">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              {landingStatuses.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {formatStatus(status)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
+
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Wrench className="h-4 w-4" aria-hidden="true" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold">Builder drafts</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Open pages created in Builder directly from the Landings workspace.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <Button asChild variant="outline">
+              <Link href="/dashboard/builder">Open Builder</Link>
+            </Button>
+          </div>
+
+          <div className="mt-4">
+            {builderPagesQuery.isLoading ? (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <Skeleton key={index} className="h-28 w-full" />
+                ))}
+              </div>
+            ) : builderPagesQuery.isError ? (
+              <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                Builder drafts could not be loaded right now.
+              </div>
+            ) : builderPagesQuery.data?.length ? (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {builderPagesQuery.data.slice(0, 6).map((page) => (
+                  <div key={page.id} className="rounded-xl border bg-card/60 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{page.name}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Updated {formatDate(page.updatedAt)}
+                        </p>
+                      </div>
+                      <Badge variant="outline">{formatStatus(page.status)}</Badge>
+                    </div>
+                    <div className="mt-4 flex items-center gap-2">
+                      <Button asChild size="sm">
+                        <Link href={`/dashboard/builder?id=${page.id}`}>
+                          Open in Builder
+                        </Link>
+                      </Button>
+                      <Button asChild size="sm" variant="outline">
+                        <Link href="/dashboard/builder">New draft</Link>
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                No builder drafts yet. Start a page in Builder and it will appear here.
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {selectedIds.length ? (
         <div className="flex flex-col gap-3 rounded-md border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -335,78 +407,74 @@ function LandingsTablePage() {
         </div>
       ) : null}
 
-      <Card>
-        <CardContent className="p-0">
-          {landingsQuery.isLoading ? (
-            <div className="space-y-3 p-4">
-              {Array.from({ length: 7 }).map((_, index) => (
-                <Skeleton key={index} className="h-14 w-full" />
+      <div className="rounded-lg border bg-card overflow-hidden">
+        {landingsQuery.isLoading ? (
+          <div className="space-y-3 p-4">
+            {Array.from({ length: 7 }).map((_, index) => (
+              <Skeleton key={index} className="h-14 w-full" />
+            ))}
+          </div>
+        ) : landingsQuery.isError ? (
+          <div className="p-6">
+            <p className="text-sm font-medium">Unable to load landings</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Check the API server and authentication state, then retry.
+            </p>
+            <Button
+              variant="outline"
+              className="mt-4"
+              onClick={() => void landingsQuery.refetch()}
+            >
+              Retry
+            </Button>
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <TableHead
+                      key={header.id}
+                      className={`h-10 text-xs font-medium uppercase tracking-wider text-muted-foreground ${getColumnClass(header.column) ?? ""}`}
+                    >
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(header.column.columnDef.header, header.getContext())}
+                    </TableHead>
+                  ))}
+                </TableRow>
               ))}
-            </div>
-          ) : landingsQuery.isError ? (
-            <div className="p-6">
-              <p className="text-sm font-medium">Unable to load landings</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Check the API server and authentication state, then retry.
-              </p>
-              <Button
-                variant="outline"
-                className="mt-4"
-                onClick={() => void landingsQuery.refetch()}
-              >
-                Retry
-              </Button>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <TableHead
-                        key={header.id}
-                        className={getColumnClass(header.column)}
-                      >
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
-                      </TableHead>
+            </TableHeader>
+            <TableBody>
+              {table.getRowModel().rows.length ? (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    data-state={row.getIsSelected() ? "selected" : undefined}
+                    className="border-b transition-colors hover:bg-muted/40 data-[state=selected]:bg-muted"
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id} className={getColumnClass(cell.column)}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
                     ))}
                   </TableRow>
-                ))}
-              </TableHeader>
-              <TableBody>
-                {table.getRowModel().rows.length ? (
-                  table.getRowModel().rows.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      data-state={row.getIsSelected() ? "selected" : undefined}
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id} className={getColumnClass(cell.column)}>
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={columns.length}
-                      className="h-32 text-center text-muted-foreground"
-                    >
-                      No landings match the current filters.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={columns.length}
+                    className="h-32 text-center text-muted-foreground"
+                  >
+                    No landings match the current filters.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        )}
+      </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
@@ -615,9 +683,12 @@ function createColumns({
       id: "status",
       header: "Status",
       cell: ({ row }) => (
-        <Badge variant={getStatusVariant(row.original.status)}>
+        <div className="flex items-center gap-2">
+          <div
+            className={`h-2 w-2 rounded-full ${getStatusDotColor(row.original.status)}`}
+          />
           {formatStatus(row.original.status)}
-        </Badge>
+        </div>
       )
     },
     {
@@ -948,7 +1019,7 @@ function PreviewThumb({ landing }: { landing: LandingRow }) {
     return (
       <div
         aria-hidden="true"
-        className="h-12 w-20 rounded-md border object-cover"
+        className="h-10 w-16 rounded-md border shadow-sm object-cover"
         style={{
           backgroundImage: `url(${thumbnailUrl})`,
           backgroundPosition: "center",
@@ -959,7 +1030,7 @@ function PreviewThumb({ landing }: { landing: LandingRow }) {
   }
 
   return (
-    <div className="flex h-12 w-20 items-center justify-center rounded-md border bg-muted text-xs font-medium text-muted-foreground">
+    <div className="flex h-10 w-16 items-center justify-center rounded-md border bg-muted/50 text-[10px] font-medium text-muted-foreground shadow-sm">
       {landing.geo.code}
     </div>
   );
@@ -996,16 +1067,16 @@ function formatStatus(status: LandingStatus | string) {
     .join(" ");
 }
 
-function getStatusVariant(status: LandingStatus) {
+function getStatusDotColor(status: LandingStatus) {
   if (status === "PUBLISHED") {
-    return "default";
+    return "bg-emerald-500";
   }
 
   if (status === "ARCHIVED") {
-    return "muted";
+    return "bg-muted-foreground";
   }
 
-  return "secondary";
+  return "bg-amber-500";
 }
 
 function formatDate(value: string) {

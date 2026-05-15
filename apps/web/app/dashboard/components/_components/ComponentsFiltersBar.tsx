@@ -1,6 +1,6 @@
 "use client";
 
-import { Grid2X2, List, Search, X } from "lucide-react";
+import { Check, ChevronDown, Grid2X2, List, Search, X } from "lucide-react";
 import * as React from "react";
 
 import {
@@ -11,19 +11,32 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   cn
 } from "@workspace/ui";
+import type { ComponentCategory } from "@workspace/types";
+
+import { ComponentCategoryIcon } from "./ComponentCategoryIcon";
 
 type SortOption = "updatedAt" | "usageCount" | "name" | "pinned";
 type ViewMode = "grid" | "list";
 
+const ALL_CATEGORIES = "__all__";
+
 type ComponentsFiltersBarProps = {
   search: string;
+  categories: ComponentCategory[];
+  selectedCategoryId: string | null;
   selectedTags: string[];
   sort: SortOption;
   view: ViewMode;
   total: number;
   onSearchChange: (value: string) => void;
+  onCategoryChange: (id: string | null) => void;
   onTagRemove: (tag: string) => void;
   onSortChange: (value: SortOption) => void;
   onViewChange: (value: ViewMode) => void;
@@ -38,11 +51,14 @@ const sortLabels: Record<SortOption, string> = {
 
 function ComponentsFiltersBar({
   search,
+  categories,
+  selectedCategoryId,
   selectedTags,
   sort,
   view,
   total,
   onSearchChange,
+  onCategoryChange,
   onTagRemove,
   onSortChange,
   onViewChange
@@ -77,26 +93,99 @@ function ComponentsFiltersBar({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const selectedCategory = React.useMemo(
+    () =>
+      selectedCategoryId
+        ? categories.find((c) => c.id === selectedCategoryId)
+        : undefined,
+    [categories, selectedCategoryId]
+  );
+
   return (
     <div className="sticky top-[120px] z-10 border-b bg-background/95 px-4 py-3 backdrop-blur sm:px-6">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-        <div className="relative min-w-0 flex-1">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            ref={inputRef}
-            value={draftSearch}
-            onChange={(event) => setDraftSearch(event.target.value)}
-            placeholder="Search components..."
-            className="h-10 pl-9"
-            aria-label="Search components"
-          />
+        <div className="flex min-w-0 w-full flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="w-full shrink-0 sm:max-w-[280px] lg:hidden">
+            <Select
+              value={selectedCategoryId ?? ALL_CATEGORIES}
+              onValueChange={(value) =>
+                onCategoryChange(value === ALL_CATEGORIES ? null : value)
+              }
+            >
+              <SelectTrigger className="h-10 w-full" aria-label="Filter by category">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_CATEGORIES}>All categories</SelectItem>
+                {categories.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    <span className="flex items-center gap-2">
+                      <ComponentCategoryIcon
+                        slug={category.slug}
+                        icon={category.icon}
+                        className="text-muted-foreground"
+                      />
+                      {category.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="relative min-w-0 flex-1">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              ref={inputRef}
+              value={draftSearch}
+              onChange={(event) => setDraftSearch(event.target.value)}
+              placeholder="Search components..."
+              className="h-10 pl-9"
+              aria-label="Search components"
+            />
+          </div>
         </div>
 
-        {selectedTags.length ? (
+        {selectedCategoryId || selectedTags.length ? (
           <div className="flex flex-wrap gap-2">
+            {selectedCategoryId ? (
+              selectedCategory ? (
+                <button
+                  type="button"
+                  onClick={() => onCategoryChange(null)}
+                  aria-label={`Remove category: ${selectedCategory.name}`}
+                >
+                  <Badge
+                    variant="outline"
+                    className="gap-1.5 border-border/80 bg-transparent font-normal text-foreground"
+                  >
+                    <ComponentCategoryIcon
+                      slug={selectedCategory.slug}
+                      icon={selectedCategory.icon}
+                      className="text-muted-foreground"
+                    />
+                    {selectedCategory.name}
+                    <X className="h-3 w-3 shrink-0 opacity-70" aria-hidden="true" />
+                  </Badge>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onCategoryChange(null)}
+                  aria-label="Remove category filter"
+                >
+                  <Badge
+                    variant="outline"
+                    className="gap-1 border-border/80 bg-transparent font-normal"
+                  >
+                    Category
+                    <X className="h-3 w-3 shrink-0 opacity-70" aria-hidden="true" />
+                  </Badge>
+                </button>
+              )
+            ) : null}
             {selectedTags.map((tag) => (
               <button key={tag} type="button" onClick={() => onTagRemove(tag)}>
                 <Badge variant="secondary" className="gap-1">
@@ -111,9 +200,16 @@ function ComponentsFiltersBar({
         <div className="flex flex-wrap items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button type="button" variant="outline" className="min-w-36 justify-between">
+              <Button
+                type="button"
+                variant="outline"
+                className="min-w-36 justify-between gap-2"
+              >
                 {sortLabels[sort]}
-                <span className="text-muted-foreground">▾</span>
+                <ChevronDown
+                  className="h-4 w-4 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
@@ -122,7 +218,13 @@ function ComponentsFiltersBar({
                   key={value}
                   onClick={() => onSortChange(value as SortOption)}
                 >
-                  <span className="w-4">{sort === value ? "●" : ""}</span>
+                  <Check
+                    className={cn(
+                      "h-4 w-4",
+                      sort === value ? "opacity-100" : "opacity-0"
+                    )}
+                    aria-hidden="true"
+                  />
                   {label}
                 </DropdownMenuItem>
               ))}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,7 +16,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  Input,
+  Input
 } from "@workspace/ui";
 
 import { login } from "../../lib/api/auth";
@@ -29,7 +29,7 @@ import { GoogleButton } from "../../components/auth/google-button";
 
 const loginFormSchema = z.object({
   email: z.string().email("Enter a valid email address."),
-  password: z.string().min(1, "Password is required."),
+  password: z.string().min(1, "Password is required.")
 });
 
 type LoginFormValues = z.infer<typeof loginFormSchema>;
@@ -59,7 +59,7 @@ function mapServerError(error: unknown): string {
 // Page
 // ────────────────────────────────────────────────────────────────
 
-export default function LoginPage() {
+function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const user = useAuthStore((state) => state.user);
@@ -72,10 +72,10 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting }
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginFormSchema),
-    defaultValues: { email: "", password: "" },
+    defaultValues: { email: "", password: "" }
   });
 
   // If already authenticated, bounce to dashboard (or `next`).
@@ -103,9 +103,7 @@ export default function LoginPage() {
             <LogIn className="h-5 w-5" aria-hidden="true" />
           </div>
           <CardTitle className="text-2xl">Sign in</CardTitle>
-          <CardDescription>
-            Access the LendSphera landing page builder.
-          </CardDescription>
+          <CardDescription>Access the LendSphera landing page builder.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <GoogleButton />
@@ -122,10 +120,7 @@ export default function LoginPage() {
             className="flex flex-col gap-4"
           >
             <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="email"
-                className="text-sm font-medium text-foreground"
-              >
+              <label htmlFor="email" className="text-sm font-medium text-foreground">
                 Email
               </label>
               <Input
@@ -147,10 +142,7 @@ export default function LoginPage() {
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="password"
-                className="text-sm font-medium text-foreground"
-              >
+              <label htmlFor="password" className="text-sm font-medium text-foreground">
                 Password
               </label>
               <Input
@@ -175,10 +167,7 @@ export default function LoginPage() {
                 role="alert"
                 className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
               >
-                <AlertCircle
-                  className="mt-0.5 h-4 w-4 shrink-0"
-                  aria-hidden="true"
-                />
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                 <span>{serverError}</span>
               </div>
             ) : null}
@@ -207,5 +196,25 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-12">
+          <Card className="w-full max-w-md">
+            <CardHeader className="space-y-2 text-center">
+              <div className="mx-auto h-12 w-12 animate-pulse rounded-full bg-muted" />
+              <div className="mx-auto h-8 w-40 animate-pulse rounded-md bg-muted" />
+              <div className="mx-auto h-4 w-64 animate-pulse rounded-md bg-muted" />
+            </CardHeader>
+          </Card>
+        </main>
+      }
+    >
+      <LoginPageContent />
+    </Suspense>
   );
 }

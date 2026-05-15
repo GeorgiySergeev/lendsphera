@@ -21,9 +21,7 @@ async function bootstrap() {
     logger.log("🔐 [STARTUP] Running in PRODUCTION mode");
     logger.log("🔐 [STARTUP] JWT secrets validated — OK");
   } else {
-    logger.warn(
-      "🛠️  [STARTUP] Running in DEV/TEST mode — default secrets may be in use",
-    );
+    logger.warn("🛠️  [STARTUP] Running in DEV/TEST mode — default secrets may be in use");
   }
 
   const app = await NestFactory.create(AppModule);
@@ -50,8 +48,15 @@ async function bootstrap() {
     env.WEB_ORIGIN,
     env.RUNTIME_ORIGIN,
     ...(env.NODE_ENV === "development"
-      ? ["http://localhost:3002", "http://localhost:3001", "http://localhost:4000"]
-      : []),
+      ? [
+          "http://localhost:3002",
+          "http://localhost:3001",
+          "http://localhost:4000",
+          "http://127.0.0.1:3002",
+          "http://127.0.0.1:3001",
+          "http://127.0.0.1:4000"
+        ]
+      : [])
   ].filter(Boolean) as string[];
 
   const corsOptions: CorsOptions = {
@@ -69,16 +74,13 @@ async function bootstrap() {
     allowedHeaders: ["Content-Type", "Authorization"],
     maxAge: 3600,
     preflightContinue: false,
-    optionsSuccessStatus: 200,
+    optionsSuccessStatus: 200
   };
 
   app.enableCors(corsOptions);
   // =========================================
   app.useGlobalPipes(new ZodValidationPipe());
-  app.useGlobalFilters(
-    new HttpExceptionFilter(),
-    new ThrottleExceptionFilter()
-  );
+  app.useGlobalFilters(new HttpExceptionFilter(), new ThrottleExceptionFilter());
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle("Landing Builder API")
