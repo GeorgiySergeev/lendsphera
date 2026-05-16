@@ -1,6 +1,5 @@
 "use client";
 
-import StudioEditor from "@grapesjs/studio-sdk/react";
 import {
   accordionComponent,
   canvasEmptyState,
@@ -17,7 +16,7 @@ import "@grapesjs/studio-sdk/style";
 
 import * as React from "react";
 
-import { Button, Skeleton } from "@workspace/ui";
+import { Button } from "@workspace/ui";
 
 import {
   acquireLandingLock,
@@ -116,6 +115,8 @@ const templatesPanelLayout = {
 
 function LandingStudioShell({ landingId }: LandingStudioShellProps) {
   const editorRef = React.useRef<any>(null);
+  const studioRootRef = React.useRef<HTMLDivElement | null>(null);
+  const studioInitRef = React.useRef(false);
   const lockStatusRef = React.useRef<"acquiring" | "locked" | "lost" | "error" | null>(
     null
   );
@@ -198,7 +199,34 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
       customTheme: studioTheme,
       assets: {
         storageType: "self",
-        onLoad: async () => loadStudioAssets(),
+        providerId: "dashboard-media-library",
+        providers: [
+          {
+            id: "dashboard-media-library",
+            label: "Dashboard media",
+            types: "image",
+            onLoad: async () => {
+              const assets = await loadStudioAssets();
+              if (!assets.length) {
+                toast.error(
+                  "Media library is empty for this session",
+                  "No readable image assets were returned by /media or /assets."
+                );
+              }
+              return assets;
+            }
+          }
+        ],
+        onLoad: async () => {
+          const assets = await loadStudioAssets();
+          if (!assets.length) {
+            toast.error(
+              "Media library is empty for this session",
+              "No readable image assets were returned by /media or /assets."
+            );
+          }
+          return assets;
+        },
         onUpload: async () => {
           toast.error(
             "Upload is not configured yet",
@@ -386,6 +414,53 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
     [landingId]
   );
 
+  React.useEffect(() => {
+    let disposed = false;
+
+    async function initStudio() {
+      if (!studioRootRef.current || studioInitRef.current) {
+        return;
+      }
+
+      studioInitRef.current = true;
+      setIsReady(false);
+
+      const { createStudioEditor } = await import("@grapesjs/studio-sdk");
+      await createStudioEditor({
+        ...(studioOptions as any),
+        root: studioRootRef.current,
+        onEditor: (editor: any) => {
+          editorRef.current = editor;
+        },
+        onReady: (editor: any) => {
+          if (disposed) {
+            return;
+          }
+          editorRef.current = editor;
+          setIsReady(true);
+        },
+        onDestroy: () => {
+          editorRef.current = null;
+          if (!disposed) {
+            setIsReady(false);
+          }
+        }
+      });
+    }
+
+    void initStudio();
+
+    return () => {
+      disposed = true;
+      studioInitRef.current = false;
+      const editor = editorRef.current;
+      if (editor && typeof editor.destroy === "function") {
+        editor.destroy();
+      }
+      editorRef.current = null;
+    };
+  }, [studioOptions]);
+
   if (loadError && !isReady) {
     return (
       <div className="flex min-h-[calc(100vh-2rem)] items-center justify-center rounded-xl border bg-background p-8 text-center shadow-sm">
@@ -401,19 +476,7 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
 
   return (
     <div className="relative h-[calc(100vh-2rem)] overflow-hidden rounded-xl border bg-background shadow-sm">
-      {!isReady ? (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/90">
-          <Skeleton className="h-10 w-10 rounded-full" />
-        </div>
-      ) : null}
-      <StudioEditor
-        className="h-full w-full"
-        options={studioOptions as any}
-        onReady={(editor) => {
-          editorRef.current = editor;
-          setIsReady(true);
-        }}
-      />
+      <div ref={studioRootRef} className="h-full w-full" />
     </div>
   );
 }
@@ -553,25 +616,38 @@ async function loadStudioTemplates(): Promise<StudioTemplate[]> {
 }
 
 async function loadStudioAssets(): Promise<StudioAsset[]> {
-  const response = await apiClient.get("/assets", {
-    params: {
-      limit: 200,
-      page: 1
+  const mediaParams = {
+    limit: 100,
+    page: 1,
+    sortBy: "createdAt",
+    sortOrder: "desc"
+  } as const;
+  const assetsParams = { limit: 200, page: 1 };
+
+  try {
+    const response = await apiClient.get("/media", { params: mediaParams });
+    const items = Array.isArray(response.data?.items) ? response.data.items : [];
+    const normalized = normalizeStudioAssets(items);
+    if (normalized.length > 0) {
+      return normalized;
     }
-  });
 
-  const items = Array.isArray(response.data?.items) ? response.data.items : [];
-
-  return items
-    .filter((item: any) => typeof item.url === "string" && item.url.length > 0)
-    .map((item: any) => ({
-      id: item.id,
-      src: item.url,
-      name: item.originalName,
-      mimeType: item.mimeType,
-      size: item.size,
-      type: mapAssetType(item.type, item.mimeType)
-    }));
+    const fallbackResponse = await apiClient.get("/assets", { params: assetsParams });
+    const fallbackItems = Array.isArray(fallbackResponse.data?.items)
+      ? fallbackResponse.data.items
+      : [];
+    return normalizeStudioAssets(fallbackItems);
+  } catch (error) {
+    // Backward-compatible fallback for environments still using /assets.
+    try {
+      const response = await apiClient.get("/assets", { params: assetsParams });
+      const items = Array.isArray(response.data?.items) ? response.data.items : [];
+      return normalizeStudioAssets(items);
+    } catch {
+      console.error("Failed to load Studio assets from /media and /assets", error);
+      return [];
+    }
+  }
 }
 
 function mapAssetType(type: string | undefined, mimeType: string | undefined) {
@@ -584,6 +660,39 @@ function mapAssetType(type: string | undefined, mimeType: string | undefined) {
   }
 
   return "image";
+}
+
+function normalizeStudioAssets(items: any[]): StudioAsset[] {
+  return items
+    .map((item): StudioAsset | null => {
+      const src = resolveAssetSrc(item);
+      if (!src) {
+        return null;
+      }
+
+      return {
+        id: item.id,
+        src,
+        name: item.originalName,
+        mimeType: item.mimeType,
+        size: item.size,
+        type: mapAssetType(item.type, item.mimeType)
+      };
+    })
+    .filter((item): item is StudioAsset => item !== null);
+}
+
+function resolveAssetSrc(item: any) {
+  if (typeof item?.url === "string" && item.url.trim()) {
+    return item.url.trim();
+  }
+
+  if (typeof item?.id === "string" && item.id) {
+    const base = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
+    return `${base}/media/${item.id}/content`;
+  }
+
+  return "";
 }
 
 async function resolveTemplateSelection(template: StudioTemplate) {
