@@ -466,7 +466,7 @@ function BuilderWorkspace() {
           <span className="text-muted-foreground/50">|</span>
           <span>
             Latest: v{versionsQuery.data[0].versionNum}
-            {versionsQuery.data[0].author?.email ? by : ""}
+            {versionsQuery.data[0].author?.email ? " by " : ""}
           </span>
         </footer>
       ) : null}

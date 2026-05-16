@@ -74,6 +74,11 @@ apiClient.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${accessToken}`;
   }
 
+  // Let axios set multipart boundary; default application/json breaks file uploads
+  if (config.data instanceof FormData) {
+    delete config.headers["Content-Type"];
+  }
+
   return config;
 });
 

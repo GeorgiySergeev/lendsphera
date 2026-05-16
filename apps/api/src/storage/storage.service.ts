@@ -1,10 +1,12 @@
 import {
   CreateBucketCommand,
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
   PutObjectCommand,
   S3Client
 } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Injectable } from "@nestjs/common";
 
 import { env } from "../config/env";
@@ -55,6 +57,20 @@ export class StorageService {
 
   get bucket() {
     return env.S3_BUCKET;
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    await this.getBucketReady();
+    await this.client.send(new DeleteObjectCommand({ Bucket: env.S3_BUCKET, Key: key }));
+  }
+
+  async getSignedUrl(key: string, expiresInSeconds = 3600): Promise<string> {
+    await this.getBucketReady();
+    return getSignedUrl(
+      this.client,
+      new GetObjectCommand({ Bucket: env.S3_BUCKET, Key: key }),
+      { expiresIn: expiresInSeconds }
+    );
   }
 
   private async ensureBucket() {

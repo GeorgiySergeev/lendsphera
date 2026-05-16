@@ -26,10 +26,10 @@ const dashboardNavItems: DashboardNavItem[] = [
   { title: "Builder", href: "/dashboard/builder", icon: Wrench },
   { title: "Download", href: "/dashboard/download", icon: Download },
   { title: "Localization", href: "/dashboard/localization", icon: Languages },
-  { title: "Media", href: "/dashboard/media", icon: Images },
   { title: "Widgets", href: "/dashboard/widgets", icon: Blocks },
   { title: "Component Library", href: "/dashboard/components", icon: LayoutGrid },
   { title: "Repository", href: "/dashboard/repository", icon: Database },
+  { title: "Media Library", href: "/dashboard/media", icon: Images },
   { title: "Taxonomy", href: "/dashboard/taxonomy", icon: Tags },
   { title: "Settings", href: "/dashboard/settings", icon: Settings }
 ];
