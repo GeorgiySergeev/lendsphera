@@ -10,3 +10,4 @@ coverage
 pnpm-debug.log*
 generated
 apps/api/prisma/generated
+temp
