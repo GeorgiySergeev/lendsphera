@@ -5,7 +5,7 @@ import { renderTree } from "@workspace/widgets";
 import { WidgetRuntimeLoader } from "../../widget-runtime-loader";
 import { loadLandingRuntimeData } from "../../../lib/loader";
 
-export const revalidate = 300;
+export const revalidate = 0;
 
 export default async function RuntimeLandingPage({
   params,

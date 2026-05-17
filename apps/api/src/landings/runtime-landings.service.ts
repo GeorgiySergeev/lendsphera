@@ -2,9 +2,9 @@ import { Injectable } from "@nestjs/common";
 import { LandingStatus, VersionStatus } from "@prisma/client";
 import type { LandingContext } from "@workspace/types";
 
-import { env } from "../config/env";
 import { PrismaService } from "../prisma/prisma.service";
 import { LandingContextResolver } from "./landing-context.resolver";
+import { verifyPreviewToken } from "./preview-token";
 
 type RuntimeWidgetSpec = {
   id: string;
@@ -58,7 +58,11 @@ export class RuntimeLandingsService {
       return null;
     }
 
-    const canUseDraft = this.isPreviewTokenValid(previewToken);
+    const previewPayload = verifyPreviewToken(previewToken);
+    const canUseDraft =
+      previewPayload?.landingId === landing.id &&
+      previewPayload.geo.toLowerCase() === landing.geo.code.toLowerCase() &&
+      previewPayload.slug === landing.slug;
     const published =
       landing.versions.find((item) => item.status === VersionStatus.PUBLISHED) ?? null;
     const draftCandidate = landing.currentVersion ?? landing.versions[0] ?? null;
@@ -82,15 +86,6 @@ export class RuntimeLandingsService {
       versionId: selected.id,
       isDraft: canUseDraft && selected.id === draftCandidate?.id
     };
-  }
-
-  private isPreviewTokenValid(token: string | null): boolean {
-    if (!token) {
-      return false;
-    }
-
-    const expected = process.env.RUNTIME_PREVIEW_TOKEN ?? env.LS_BRIDGE_KEY;
-    return token === expected;
   }
 
   private resolveSnapshotSpecs(grapesJson: unknown, html: string): RuntimeWidgetSpec[] {

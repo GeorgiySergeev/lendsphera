@@ -44,6 +44,7 @@
     "grapesjs-blocks-basic": "^1.0.2",
     "grapesjs-preset-webpage": "^1.0.3",
     "js-beautify": "^1.15.4",
+    "jsondiffpatch": "^0.7.6",
     "lucide-react": "^0.552.0",
     "monaco-editor": "^0.55.1",
     "monaco-tailwindcss": "^0.6.1",

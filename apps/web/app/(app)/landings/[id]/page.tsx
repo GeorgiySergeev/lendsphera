@@ -24,6 +24,13 @@ export default function LandingDetailPage() {
         Back to landings
       </Link>
       <h1 className="text-2xl font-semibold">{landingQuery.data?.name ?? "Landing"}</h1>
+      `r`n{" "}
+      <Link
+        className="text-sm underline-offset-2 hover:underline"
+        href={`/landings/${id}/versions`}
+      >
+        View versions
+      </Link>
       <div className="grid gap-2 rounded-md border bg-card p-4 text-sm md:grid-cols-2">
         <p>
           <span className="font-medium">Public ID:</span>{" "}

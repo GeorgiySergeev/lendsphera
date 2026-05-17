@@ -136,6 +136,13 @@ type LandingEditorDraftResponse = {
   versionNum: number;
 };
 
+type LandingPreviewTokenResponse = {
+  expiresInSeconds: number;
+  geo: string;
+  slug: string;
+  token: string;
+};
+
 type LandingNameAvailability = {
   name: string;
   available: boolean;
@@ -367,6 +374,14 @@ async function buildPreview(landingId: string) {
   return response.data;
 }
 
+async function createLandingPreviewToken(landingId: string) {
+  const response = await apiClient.post<LandingPreviewTokenResponse>(
+    `/landings/${landingId}/preview-token`
+  );
+
+  return response.data;
+}
+
 async function duplicateLanding(landingId: string, geoId: string) {
   const response = await apiClient.post<LandingRow>(`/landings/${landingId}/duplicate`, {
     geoId
@@ -427,6 +442,7 @@ export {
   bulkDeleteLandings,
   bulkUpdateLandingStatus,
   createLanding,
+  createLandingPreviewToken,
   deleteLanding,
   duplicateLanding,
   fetchLanding,
@@ -461,6 +477,7 @@ export type {
   LandingNameAvailability,
   LandingListFilters,
   LandingPublicIdSuggestion,
+  LandingPreviewTokenResponse,
   LandingRow,
   LandingStatus,
   LandingVersion,

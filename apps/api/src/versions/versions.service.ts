@@ -5,7 +5,7 @@ import type { AuthUser } from "../common/current-user.decorator";
 import { toInputJson } from "../common/prisma-json";
 import { mapPrismaError } from "../common/prisma-errors";
 import { PrismaService } from "../prisma/prisma.service";
-import type { CreateVersionDto } from "./versions.dto";
+import type { CreateVersionDto, ListVersionsQueryDto } from "./versions.dto";
 
 const DIFF_FIELDS = [
   "grapesJson",
@@ -15,17 +15,33 @@ const DIFF_FIELDS = [
   "customCss",
   "customJs"
 ] as const;
+const PRICE_KEYS = ["price", "oldPrice", "discount", "currency"] as const;
 
 @Injectable()
 export class VersionsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  listForLanding(landingId: string) {
-    return this.prisma.version.findMany({
-      where: { landingId },
-      orderBy: { versionNum: "desc" },
-      include: { author: { select: { id: true, email: true, name: true, role: true } } }
+  async listForLanding(landingId: string, query: ListVersionsQueryDto) {
+    const where: Prisma.VersionWhereInput = {
+      landingId,
+      status: query.includeAutosave ? undefined : { not: VersionStatus.AUTOSAVE }
+    };
+
+    const items = await this.prisma.version.findMany({
+      where,
+      include: {
+        author: { select: { id: true, email: true, name: true, role: true } }
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      cursor: query.cursor ? { id: query.cursor } : undefined,
+      skip: query.cursor ? 1 : 0,
+      take: query.take
     });
+
+    return {
+      items,
+      nextCursor: items.length === query.take ? (items.at(-1)?.id ?? null) : null
+    };
   }
 
   get(id: string) {
@@ -123,7 +139,7 @@ export class VersionsService {
     }
   }
 
-  async rollback(id: string, user: AuthUser) {
+  async restore(id: string, user: AuthUser) {
     try {
       return await this.prisma.$transaction(async (tx) => {
         const source = await tx.version.findUniqueOrThrow({ where: { id } });
@@ -132,7 +148,7 @@ export class VersionsService {
           orderBy: { versionNum: "desc" },
           select: { versionNum: true }
         });
-        const rollback = await tx.version.create({
+        const restored = await tx.version.create({
           data: {
             landingId: source.landingId,
             versionNum: (latest?.versionNum ?? 0) + 1,
@@ -147,16 +163,16 @@ export class VersionsService {
             snapshotSize: source.snapshotSize,
             authorId: user.id,
             parentVersionId: source.id,
-            message: `Rollback to version ${source.versionNum}`
+            message: `Restored from version ${source.versionNum}`
           }
         });
 
         await tx.landing.update({
           where: { id: source.landingId },
-          data: { currentVersionId: rollback.id }
+          data: { currentVersionId: restored.id }
         });
 
-        return rollback;
+        return restored;
       });
     } catch (error) {
       mapPrismaError(error);
@@ -169,6 +185,9 @@ export class VersionsService {
       this.prisma.version.findUniqueOrThrow({ where: { id: toId } })
     ]);
 
+    const fromPlaceholders = this.toRecord(from.placeholders);
+    const toPlaceholders = this.toRecord(to.placeholders);
+
     return {
       fromId,
       toId,
@@ -177,7 +196,28 @@ export class VersionsService {
         changed: JSON.stringify(from[field]) !== JSON.stringify(to[field]),
         from: from[field],
         to: to[field]
-      }))
+      })),
+      priceHighlights: PRICE_KEYS.map((key) => ({
+        key,
+        from: fromPlaceholders[key] ?? null,
+        to: toPlaceholders[key] ?? null,
+        changed: (fromPlaceholders[key] ?? null) !== (toPlaceholders[key] ?? null)
+      })).filter((item) => item.changed)
     };
+  }
+
+  private toRecord(input: unknown): Record<string, string> {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      return {};
+    }
+
+    const result: Record<string, string> = {};
+    for (const [key, value] of Object.entries(input)) {
+      if (typeof value === "string") {
+        result[key] = value;
+      }
+    }
+
+    return result;
   }
 }

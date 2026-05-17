@@ -1,6 +1,6 @@
 import { InjectQueue } from "@nestjs/bullmq";
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { PublishJobStatus, PublishTarget } from "@prisma/client";
+import { Prisma, PublishJobStatus, PublishTarget, VersionStatus } from "@prisma/client";
 import { Queue } from "bullmq";
 import { minify } from "html-minifier-terser";
 import { transform } from "lightningcss";
@@ -11,32 +11,68 @@ import tailwindcss from "tailwindcss";
 
 import type { AuthUser } from "../common/current-user.decorator";
 import { mapPrismaError } from "../common/prisma-errors";
+import { LandingContextResolver } from "../landings/landing-context.resolver";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
 export class PublishService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly landingContext: LandingContextResolver,
     @InjectQueue("publishLanding") private readonly publishQueue: Queue
   ) {}
 
   async enqueuePublishJob(landingId: string, user: AuthUser) {
     try {
+      const contextSnapshot = await this.landingContext.resolve(landingId);
+
       return await this.prisma.$transaction(async (tx) => {
         const landing = await tx.landing.findUniqueOrThrow({
           where: { id: landingId },
           include: { currentVersion: true }
         });
 
-        if (!landing.currentVersionId) {
+        if (!landing.currentVersionId || !landing.currentVersion) {
           throw new BadRequestException("No draft exists to publish.");
         }
+
+        const latest = await tx.version.findFirst({
+          where: { landingId },
+          orderBy: { versionNum: "desc" },
+          select: { versionNum: true }
+        });
+
+        const publishVersion = await tx.version.create({
+          data: {
+            landingId,
+            versionNum: (latest?.versionNum ?? 0) + 1,
+            status: VersionStatus.PUBLISHED,
+            grapesJson: landing.currentVersion.grapesJson ?? Prisma.JsonNull,
+            placeholders:
+              (contextSnapshot.placeholders as unknown as Prisma.InputJsonValue) ??
+              Prisma.JsonNull,
+            html: landing.currentVersion.html,
+            css: landing.currentVersion.css,
+            customCss: landing.currentVersion.customCss,
+            customJs: landing.currentVersion.customJs,
+            snapshotS3Key: landing.currentVersion.snapshotS3Key,
+            snapshotSize: landing.currentVersion.snapshotSize,
+            authorId: user.id,
+            parentVersionId: landing.currentVersion.id,
+            message: "Publish snapshot"
+          }
+        });
+
+        await tx.landing.update({
+          where: { id: landingId },
+          data: { currentVersionId: publishVersion.id }
+        });
 
         const job = await tx.publishJob.create({
           data: {
             landingId,
-            versionId: landing.currentVersionId,
-            target: PublishTarget.CLOUDFLARE_PAGES, // Using default
+            versionId: publishVersion.id,
+            target: PublishTarget.CLOUDFLARE_PAGES,
             status: PublishJobStatus.QUEUED,
             triggeredById: user.id
           }
@@ -47,7 +83,7 @@ export class PublishService {
           {
             publishJobId: job.id,
             landingId,
-            versionId: landing.currentVersionId
+            versionId: publishVersion.id
           },
           { jobId: job.id }
         );
@@ -79,7 +115,6 @@ export class PublishService {
     let html = version.html || "";
 
     try {
-      // 1. Compile Tailwind
       const tailwindPlugin = tailwindcss as unknown as (
         options: Record<string, unknown>
       ) => AcceptedPlugin;
@@ -98,12 +133,10 @@ export class PublishService {
       );
       let finalCss = twResult.css;
 
-      // 2. Inline customCss
       if (version.customCss) {
         finalCss += "\n" + version.customCss;
       }
 
-      // 3. Minify CSS with lightningcss
       const cssBuffer = Buffer.from(finalCss);
       const minifiedCss = transform({
         filename: "style.css",
@@ -112,14 +145,11 @@ export class PublishService {
         sourceMap: false
       }).code.toString();
 
-      // Inject CSS
       html = html.replace("</head>", `<style>${minifiedCss}</style>\n</head>`);
 
-      // 4. Inject widget loader
       const widgetLoaderScript = `<script src="/widget-loader.js" async></script>`;
       html = html.replace("</body>", `${widgetLoaderScript}\n</body>`);
 
-      // 5. Minify HTML
       const minifiedHtml = await minify(html, {
         collapseWhitespace: true,
         removeComments: true,

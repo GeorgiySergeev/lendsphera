@@ -1,11 +1,11 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 
 import { CurrentUser, type AuthUser } from "../common/current-user.decorator";
 import { JwtAuthGuard } from "../common/jwt-auth.guard";
 import { READ_ROLES, Roles, WRITE_ROLES } from "../common/roles";
 import { RolesGuard } from "../common/roles.guard";
-import { CreateVersionDto, DraftVersionDto } from "./versions.dto";
+import { CreateVersionDto, DraftVersionDto, ListVersionsQueryDto } from "./versions.dto";
 import { VersionsService } from "./versions.service";
 
 @ApiTags("Versions")
@@ -17,8 +17,11 @@ export class VersionsController {
 
   @Roles(...READ_ROLES)
   @Get("landings/:landingId/versions")
-  listForLanding(@Param("landingId") landingId: string) {
-    return this.versions.listForLanding(landingId);
+  listForLanding(
+    @Param("landingId") landingId: string,
+    @Query() query: ListVersionsQueryDto
+  ) {
+    return this.versions.listForLanding(landingId, query);
   }
 
   @Roles(...WRITE_ROLES)
@@ -48,9 +51,15 @@ export class VersionsController {
   }
 
   @Roles(...WRITE_ROLES)
+  @Post("versions/:id/restore")
+  restore(@Param("id") id: string, @CurrentUser() user: AuthUser) {
+    return this.versions.restore(id, user);
+  }
+
+  @Roles(...WRITE_ROLES)
   @Post("versions/:id/rollback")
   rollback(@Param("id") id: string, @CurrentUser() user: AuthUser) {
-    return this.versions.rollback(id, user);
+    return this.versions.restore(id, user);
   }
 
   @Roles(...READ_ROLES)

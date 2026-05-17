@@ -81,6 +81,31 @@ export type LandingEditorContext = {
   widgets: LandingEditorNode[];
 };
 
+export type LandingVersion = {
+  id: string;
+  versionNum: number;
+  status: string;
+  message?: string | null;
+  createdAt: string;
+  author?: {
+    id: string;
+    email: string;
+    name?: string | null;
+  } | null;
+};
+
+export type VersionDiffResponse = {
+  fromId: string;
+  toId: string;
+  fields: Array<{ field: string; changed: boolean; from: unknown; to: unknown }>;
+  priceHighlights: Array<{
+    key: "price" | "oldPrice" | "discount" | "currency";
+    from: string | null;
+    to: string | null;
+    changed: boolean;
+  }>;
+};
+
 export function createServerApiClient() {
   return apiClient;
 }
@@ -161,6 +186,34 @@ export async function fetchLanding(id: string) {
 
 export async function fetchLandingRawContext(id: string) {
   const response = await apiClient.get<unknown>(`/landings/${id}/context`);
+  return response.data;
+}
+
+export async function fetchLandingVersions(
+  landingId: string,
+  params?: { cursor?: string; take?: number }
+) {
+  const response = await apiClient.get<CursorListResponse<LandingVersion>>(
+    `/landings/${landingId}/versions`,
+    {
+      params: {
+        cursor: params?.cursor || undefined,
+        take: params?.take ?? 20
+      }
+    }
+  );
+  return response.data;
+}
+
+export async function restoreLandingVersion(versionId: string) {
+  const response = await apiClient.post<LandingVersion>(`/versions/${versionId}/restore`);
+  return response.data;
+}
+
+export async function fetchVersionDiff(fromId: string, toId: string) {
+  const response = await apiClient.get<VersionDiffResponse>(
+    `/versions/${fromId}/diff/${toId}`
+  );
   return response.data;
 }
 

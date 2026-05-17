@@ -2,6 +2,8 @@ import { VersionStatus } from "@prisma/client";
 import { createZodDto } from "nestjs-zod";
 import { z } from "zod";
 
+import { boolish } from "../common/schemas";
+
 const versionBaseSchema = z.object({
   status: z.nativeEnum(VersionStatus).optional(),
   grapesJson: z.unknown(),
@@ -40,3 +42,11 @@ const draftVersionSchema = z.object({
 });
 
 export class DraftVersionDto extends createZodDto(draftVersionSchema) {}
+
+const listVersionsQuerySchema = z.object({
+  cursor: z.string().min(1).optional(),
+  take: z.coerce.number().int().min(1).max(100).default(20),
+  includeAutosave: boolish
+});
+
+export class ListVersionsQueryDto extends createZodDto(listVersionsQuerySchema) {}

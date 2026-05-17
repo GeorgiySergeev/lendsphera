@@ -16,12 +16,13 @@ import "@grapesjs/studio-sdk/style";
 
 import * as React from "react";
 
-import { Button } from "@workspace/ui";
+import { Button, Dialog, DialogContent, DialogHeader, DialogTitle } from "@workspace/ui";
 
 import {
   acquireLandingLock,
   fetchLanding,
   fetchLandingEditorDocument,
+  createLandingPreviewToken,
   refreshLandingLock,
   releaseLandingLock,
   saveLandingDraftVersion,
@@ -34,6 +35,7 @@ import { apiClient } from "../../lib/api/client";
 import { componentsApi } from "../../lib/api/components";
 import { toast } from "../../lib/toast";
 import { useDashboardTopbarStore } from "../../stores/dashboard-topbar-store";
+import { PreviewPane } from "./preview-pane";
 
 type LandingStudioShellProps = {
   landingId: string;
@@ -126,6 +128,9 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
     null
   );
   const [isReady, setIsReady] = React.useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = React.useState(false);
+  const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = React.useState(false);
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [landing, setLanding] = React.useState<LandingDetail | null>(null);
   const [landingMetaError, setLandingMetaError] = React.useState<string | null>(null);
@@ -442,6 +447,13 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
                           layout: templatesPanelLayout
                         });
                       }
+                    },
+                    {
+                      id: "open-runtime-preview",
+                      label: "Preview",
+                      onClick: () => {
+                        void openRuntimePreview();
+                      }
                     }
                   ]
                 }
@@ -535,6 +547,46 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
     [landingId]
   );
 
+  async function saveCurrentDraft() {
+    const editor = editorRef.current;
+    if (!editor) {
+      throw new Error("Editor is not ready.");
+    }
+    const project =
+      typeof editor.getProjectData === "function" ? editor.getProjectData() : null;
+    if (!project) {
+      throw new Error("Editor project is unavailable.");
+    }
+    const payload = toDraftPayload(project, editor);
+    await saveLandingDraftVersion(landingId, payload);
+  }
+
+  async function openRuntimePreview() {
+    try {
+      setIsPreviewLoading(true);
+      await saveCurrentDraft();
+      const preview = await createLandingPreviewToken(landingId);
+      const runtimeOrigin =
+        process.env.NEXT_PUBLIC_RUNTIME_ORIGIN ?? "http://127.0.0.1:3001";
+      const cacheBust = Date.now().toString(36);
+      setPreviewUrl(
+        `${runtimeOrigin}/${preview.geo}/${preview.slug}?preview=${encodeURIComponent(preview.token)}&v=${cacheBust}`
+      );
+      setIsPreviewOpen(true);
+    } catch {
+      toast.error("Preview is unavailable", "Could not prepare preview token.");
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  }
+
+  async function refreshRuntimePreview() {
+    if (!isPreviewOpen) {
+      return;
+    }
+    await openRuntimePreview();
+  }
+
   React.useEffect(() => {
     let disposed = false;
 
@@ -601,6 +653,20 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
       <div className="h-full overflow-hidden  border bg-background shadow-sm">
         <div ref={studioRootRef} className="h-full w-full" />
       </div>
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="h-[90vh] max-w-[95vw] p-0">
+          <DialogHeader className="border-b px-4 py-3">
+            <DialogTitle>Runtime Preview</DialogTitle>
+          </DialogHeader>
+          {previewUrl ? (
+            <PreviewPane
+              iframeUrl={previewUrl}
+              isLoading={isPreviewLoading}
+              onRefresh={() => void refreshRuntimePreview()}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -354,6 +354,9 @@ importers:
       js-beautify:
         specifier: ^1.15.4
         version: 1.15.4
+      jsondiffpatch:
+        specifier: ^0.7.6
+        version: 0.7.6
       lucide-react:
         specifier: ^0.552.0
         version: 0.552.0(react@19.2.6)
@@ -1264,6 +1267,12 @@ packages:
         integrity: sha512-SITSV6aIXsuVNV3f3O0f2n/cgyEDWoSqtZMYiAmcsYHydcKrOz3gUxB/iXd/Qf08+IZX4KpgNbvUdMBmWz+kcA==
       }
     engines: { node: ">=10" }
+
+  "@dmsnell/diff-match-patch@1.1.0":
+    resolution:
+      {
+        integrity: sha512-yejLPmM5pjsGvxS9gXablUSbInW7H976c/FJ4iQxWIm7/38xBySRemTPDe34lhg1gVLbJntX0+sH0jYfU+PN9A==
+      }
 
   "@dnd-kit/accessibility@3.1.1":
     resolution:
@@ -8204,6 +8213,14 @@ packages:
         integrity: sha512-HUgH65KyejrUFPvHFPbqOY0rsFip3Bo5wb4ngvdi1EpCYWUQDC5V+Y7mZws+DLkr4M//zQJoanu1SP+87Dv1oQ==
       }
 
+  jsondiffpatch@0.7.6:
+    resolution:
+      {
+        integrity: sha512-zE9+AXFq+MkTolDor2Cw1nJzLC0aleqPkYf52Kb4Kn4mJcka/gFHpGI2JBVEJCfWOvBl0OoxZS+wuLdislQcqg==
+      }
+    engines: { node: ^18.0.0 || >=20.0.0 }
+    hasBin: true
+
   jsonfile@6.2.1:
     resolution:
       {
@@ -12672,6 +12689,8 @@ snapshots:
 
   "@ctrl/tinycolor@3.6.1": {}
 
+  "@dmsnell/diff-match-patch@1.1.0": {}
+
   "@dnd-kit/accessibility@3.1.1(react@19.2.6)":
     dependencies:
       react: 19.2.6
@@ -16930,6 +16949,10 @@ snapshots:
   json5@2.2.3: {}
 
   jsonc-parser@3.3.1: {}
+
+  jsondiffpatch@0.7.6:
+    dependencies:
+      "@dmsnell/diff-match-patch": 1.1.0
 
   jsonfile@6.2.1:
     dependencies:
