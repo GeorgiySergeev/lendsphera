@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -15,6 +16,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { RedisService } from "../redis/redis.service";
 import type {
   BulkLandingDeleteDto,
+  BulkLandingOperationDto,
   BulkLandingStatusDto,
   CreateLandingDto,
   DuplicateLandingDto,
@@ -343,6 +345,116 @@ export class LandingsService {
     return { count: result.count };
   }
 
+  async bulkOperate(dto: BulkLandingOperationDto, user: AuthUser) {
+    const uniqueIds = Array.from(new Set(dto.ids));
+    if (!uniqueIds.length) {
+      throw new BadRequestException("ids must contain at least one landing id.");
+    }
+
+    const landings = await this.prisma.landing.findMany({
+      where: { id: { in: uniqueIds }, deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        templateId: true,
+        pixels: true
+      }
+    });
+
+    if (landings.length !== uniqueIds.length) {
+      throw new BadRequestException("Some selected landings were not found or deleted.");
+    }
+
+    if (dto.op === "SET_TEMPLATE" && !dto.args?.templateId) {
+      throw new BadRequestException("args.templateId is required for SET_TEMPLATE.");
+    }
+
+    if (dto.op === "REPLACE_PIXEL" && (!dto.args?.from || !dto.args?.to)) {
+      throw new BadRequestException(
+        "args.from and args.to are required for REPLACE_PIXEL."
+      );
+    }
+
+    const templateId = dto.args?.templateId;
+    if (templateId) {
+      await this.prisma.template.findUniqueOrThrow({ where: { id: templateId } });
+    }
+
+    const landingDiffs = landings.map((landing) => {
+      const diff = this.computeBulkDiff(landing, dto);
+      return {
+        id: landing.id,
+        name: landing.name,
+        before: diff.before,
+        after: diff.after,
+        changed: diff.changed
+      };
+    });
+
+    if (dto.dryRun) {
+      return {
+        dryRun: true,
+        op: dto.op,
+        total: landingDiffs.length,
+        changed: landingDiffs.filter((row) => row.changed).length,
+        items: landingDiffs
+      };
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const changedRows = landingDiffs.filter((row) => row.changed);
+      const now = new Date();
+      const parentEntityId = `bulk:${Date.now()}:${user.id}`;
+
+      await tx.auditLog.create({
+        data: {
+          action: AuditAction.UPDATE,
+          entity: "LandingBulk",
+          entityId: parentEntityId,
+          userId: user.id,
+          diff: {
+            op: dto.op,
+            total: landingDiffs.length,
+            changed: changedRows.length,
+            ids: uniqueIds
+          } as Prisma.InputJsonValue
+        }
+      });
+
+      for (const item of landingDiffs) {
+        if (!item.changed) continue;
+        await tx.landing.update({
+          where: { id: item.id },
+          data: this.buildBulkUpdateData(dto, item.after, now)
+        });
+
+        await tx.auditLog.create({
+          data: {
+            action: AuditAction.UPDATE,
+            entity: "Landing",
+            entityId: item.id,
+            userId: user.id,
+            diff: {
+              parentId: parentEntityId,
+              op: dto.op,
+              before: item.before,
+              after: item.after
+            } as Prisma.InputJsonValue
+          }
+        });
+      }
+
+      return {
+        dryRun: false,
+        op: dto.op,
+        total: landingDiffs.length,
+        changed: changedRows.length,
+        items: landingDiffs
+      };
+    });
+  }
+
   async versions(id: string, query: LandingListQueryDto) {
     const { skip, take, page, limit } = getPagination(query);
     const where: Prisma.VersionWhereInput = { landingId: id };
@@ -583,6 +695,80 @@ export class LandingsService {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
+  }
+
+  private computeBulkDiff(
+    landing: {
+      id: string;
+      name: string;
+      status: LandingStatus;
+      templateId: string | null;
+      pixels: Prisma.JsonValue | null;
+    },
+    dto: BulkLandingOperationDto
+  ) {
+    const before = {
+      status: landing.status,
+      templateId: landing.templateId,
+      pixels: landing.pixels
+    };
+    const after = {
+      status: landing.status,
+      templateId: landing.templateId,
+      pixels: landing.pixels
+    };
+
+    if (dto.op === "PUBLISH") {
+      after.status = LandingStatus.PUBLISHED;
+    } else if (dto.op === "PAUSE") {
+      after.status = LandingStatus.ARCHIVED;
+    } else if (dto.op === "SET_TEMPLATE" && dto.args?.templateId) {
+      after.templateId = dto.args.templateId;
+    } else if (dto.op === "REPLACE_PIXEL" && dto.args?.from && dto.args?.to) {
+      const raw = JSON.stringify(landing.pixels ?? null);
+      const replaced = raw.replaceAll(dto.args.from, dto.args.to);
+      after.pixels = JSON.parse(replaced) as Prisma.JsonValue | null;
+    }
+
+    const changed = JSON.stringify(before) !== JSON.stringify(after);
+
+    return { before, after, changed };
+  }
+
+  private buildBulkUpdateData(
+    dto: BulkLandingOperationDto,
+    after: {
+      status: LandingStatus;
+      templateId: string | null;
+      pixels: Prisma.JsonValue | null;
+    },
+    now: Date
+  ): Prisma.LandingUpdateInput {
+    if (dto.op === "PUBLISH") {
+      return {
+        status: after.status,
+        publishedAt: now
+      };
+    }
+
+    if (dto.op === "PAUSE") {
+      return {
+        status: after.status
+      };
+    }
+
+    if (dto.op === "SET_TEMPLATE") {
+      return {
+        template: after.templateId
+          ? { connect: { id: after.templateId } }
+          : { disconnect: true }
+      };
+    }
+
+    return {
+      pixels:
+        after.pixels === null ? Prisma.JsonNull : (after.pixels as Prisma.InputJsonValue)
+    };
   }
 
   private escapeRegex(value: string) {

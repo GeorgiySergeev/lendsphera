@@ -12,6 +12,8 @@ import tailwindcss from "tailwindcss";
 import type { AuthUser } from "../common/current-user.decorator";
 import { mapPrismaError } from "../common/prisma-errors";
 import { LandingContextResolver } from "../landings/landing-context.resolver";
+import { ApprovalsService } from "../landings/approvals.service";
+import { PolicyService } from "../policy/policy.service";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
@@ -19,6 +21,8 @@ export class PublishService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly landingContext: LandingContextResolver,
+    private readonly approvalsService: ApprovalsService,
+    private readonly policyService: PolicyService,
     @InjectQueue("publishLanding") private readonly publishQueue: Queue
   ) {}
 
@@ -31,6 +35,14 @@ export class PublishService {
           where: { id: landingId },
           include: { currentVersion: true }
         });
+        const approvalSummary = await this.approvalsService.getApprovalSummary(landingId);
+        const policy = await this.policyService.getLandingPublishPolicy();
+
+        if (approvalSummary.approvedCount < policy.requireApprovals) {
+          throw new BadRequestException(
+            `Cannot publish: ${approvalSummary.approvedCount}/${policy.requireApprovals} required approvals.`
+          );
+        }
 
         if (!landing.currentVersionId || !landing.currentVersion) {
           throw new BadRequestException("No draft exists to publish.");

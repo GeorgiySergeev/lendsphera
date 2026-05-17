@@ -26,19 +26,24 @@ export default defineConfig({
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
       dependencies: ["setup"],
-      testIgnore: /(legacy-bridge|revalidation)\.spec\.ts/
+      testIgnore: /(legacy-bridge|revalidation|pricing-matrix)\.spec\.ts/
     },
     {
       name: "firefox",
       use: { ...devices["Desktop Firefox"] },
       dependencies: ["setup"],
-      testIgnore: /(legacy-bridge|revalidation)\.spec\.ts/
+      testIgnore: /(legacy-bridge|revalidation|pricing-matrix)\.spec\.ts/
     },
     {
       name: "webkit",
       use: { ...devices["Desktop Safari"] },
       dependencies: ["setup"],
-      testIgnore: /(legacy-bridge|revalidation)\.spec\.ts/
+      testIgnore: /(legacy-bridge|revalidation|pricing-matrix)\.spec\.ts/
+    },
+    {
+      name: "pricing-matrix",
+      testMatch: /pricing-matrix\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"] }
     },
     {
       name: "revalidation",

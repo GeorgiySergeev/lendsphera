@@ -60,6 +60,19 @@ export const bulkLandingDeleteSchema = z.object({
   ids: z.array(z.string().min(1)).min(1)
 });
 
+export const bulkLandingOperationSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1),
+  op: z.enum(["PUBLISH", "PAUSE", "REPLACE_PIXEL", "SET_TEMPLATE"]),
+  dryRun: z.boolean().default(false),
+  args: z
+    .object({
+      from: z.string().optional(),
+      to: z.string().optional(),
+      templateId: z.string().optional()
+    })
+    .optional()
+});
+
 export const lockLandingSchema = z.object({
   ttlMinutes: z.number().int().min(1).max(240).default(15)
 });
@@ -76,4 +89,5 @@ export class LandingPublicIdSuggestionQueryDto extends createZodDto(
 ) {}
 export class BulkLandingStatusDto extends createZodDto(bulkLandingStatusSchema) {}
 export class BulkLandingDeleteDto extends createZodDto(bulkLandingDeleteSchema) {}
+export class BulkLandingOperationDto extends createZodDto(bulkLandingOperationSchema) {}
 export class LockLandingDto extends createZodDto(lockLandingSchema) {}

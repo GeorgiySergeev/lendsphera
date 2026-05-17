@@ -37,6 +37,8 @@ model User {
   builderVersions   BuilderPageVersion[] @relation("BuilderPageAuthor")
   widgetAuthored    Widget[]             @relation("WidgetAuthor")
   mediaFolders      MediaFolder[]
+  approvalsSubmitted Approval[]            @relation("ApprovalSubmitter")
+  approvalsReviewed  Approval[]            @relation("ApprovalReviewer")
 
   @@index([role])
   @@index([isActive])
@@ -217,6 +219,7 @@ model Landing {
   legacyRef        String?
   needsReview      Boolean        @default(false)
   placeholderManifest Json?
+  approvals        Approval[]
 
   @@unique([geoId, slug])
   @@unique([legacyRef])
@@ -228,6 +231,25 @@ model Landing {
   @@index([updatedAt])
   @@index([tags])
   @@index([name(ops: raw("gin_trgm_ops"))], map: "Landing_name_trgm_idx", type: Gin)
+}
+
+model Approval {
+  id          String   @id @default(cuid())
+  landingId   String
+  submitterId String
+  reviewerId  String?
+  status      String   @default("PENDING")
+  note        String?
+  createdAt   DateTime @default(now())
+  reviewedAt  DateTime?
+  rejectedAt  DateTime?
+  landing     Landing  @relation(fields: [landingId], references: [id], onDelete: Cascade)
+  submitter   User     @relation("ApprovalSubmitter", fields: [submitterId], references: [id], onDelete: Cascade)
+  reviewer    User?    @relation("ApprovalReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([landingId, status, createdAt])
+  @@index([submitterId, createdAt])
+  @@index([reviewerId, createdAt])
 }
 
 model Version {

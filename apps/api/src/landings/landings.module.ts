@@ -4,6 +4,7 @@ import { AuditModule } from "../audit/audit.module";
 import { PrismaModule } from "../prisma/prisma.module";
 import { RedisModule } from "../redis/redis.module";
 import { LandingContextResolver } from "./landing-context.resolver";
+import { LandingBulkController } from "./bulk.controller";
 import { LandingsController } from "./landings.controller";
 import { LandingsService } from "./landings.service";
 import { LandingPreviewController } from "./preview.controller";
@@ -17,6 +18,7 @@ import { RuntimeVarsService } from "./runtime-vars.service";
   imports: [PrismaModule, RedisModule, AuditModule],
   controllers: [
     LandingsController,
+    LandingBulkController,
     LandingPreviewController,
     RuntimeVarsController,
     RuntimeLandingsController

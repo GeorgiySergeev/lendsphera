@@ -6,6 +6,7 @@ import type {
 } from "@workspace/types";
 
 type LandingStatus = "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED";
+type LandingBulkOperation = "PUBLISH" | "PAUSE" | "REPLACE_PIXEL" | "SET_TEMPLATE";
 
 type ListMeta = {
   total: number;
@@ -136,11 +137,56 @@ type LandingEditorDraftResponse = {
   versionNum: number;
 };
 
+type LandingBulkArgs = {
+  from?: string;
+  to?: string;
+  templateId?: string;
+};
+
+type LandingBulkRequest = {
+  ids: string[];
+  op: LandingBulkOperation;
+  dryRun: boolean;
+  args?: LandingBulkArgs;
+};
+
+type LandingBulkItemDiff = {
+  id: string;
+  name: string;
+  before: {
+    status: LandingStatus;
+    templateId?: string | null;
+    pixels?: unknown;
+  };
+  after: {
+    status: LandingStatus;
+    templateId?: string | null;
+    pixels?: unknown;
+  };
+  changed: boolean;
+};
+
+type LandingBulkResponse = {
+  dryRun: boolean;
+  op: LandingBulkOperation;
+  total: number;
+  changed: number;
+  items: LandingBulkItemDiff[];
+};
+
 type LandingPreviewTokenResponse = {
   expiresInSeconds: number;
   geo: string;
   slug: string;
   token: string;
+};
+
+type LandingApprovalSummary = {
+  requireApprovals: number;
+  roles: string[];
+  approvedCount: number;
+  pendingCount: number;
+  readyToPublish: boolean;
 };
 
 type LandingNameAvailability = {
@@ -382,6 +428,32 @@ async function createLandingPreviewToken(landingId: string) {
   return response.data;
 }
 
+async function fetchLandingApprovalSummary(landingId: string) {
+  const response = await apiClient.get<LandingApprovalSummary>(
+    `/landings/${landingId}/approval-summary`
+  );
+
+  return response.data;
+}
+
+async function submitLandingForApproval(landingId: string) {
+  const response = await apiClient.post(`/landings/${landingId}/submit`);
+
+  return response.data;
+}
+
+async function approveLandingForPublish(landingId: string, note?: string) {
+  const response = await apiClient.post(`/landings/${landingId}/approve`, { note });
+
+  return response.data;
+}
+
+async function rejectLandingForPublish(landingId: string, note?: string) {
+  const response = await apiClient.post(`/landings/${landingId}/reject`, { note });
+
+  return response.data;
+}
+
 async function duplicateLanding(landingId: string, geoId: string) {
   const response = await apiClient.post<LandingRow>(`/landings/${landingId}/duplicate`, {
     geoId
@@ -413,6 +485,12 @@ async function bulkUpdateLandingStatus(ids: string[], status: LandingStatus) {
   return response.data;
 }
 
+async function runLandingBulkOperation(payload: LandingBulkRequest) {
+  const response = await apiClient.post<LandingBulkResponse>("/landings/bulk", payload);
+
+  return response.data;
+}
+
 async function acquireLandingLock(landingId: string, ttlMinutes: number = 15) {
   const response = await apiClient.post(`/landings/${landingId}/lock`, {
     ttlMinutes
@@ -437,6 +515,7 @@ async function releaseLandingLock(landingId: string) {
 
 export {
   acquireLandingLock,
+  approveLandingForPublish,
   buildCreateLandingPayload,
   buildPreview,
   bulkDeleteLandings,
@@ -450,6 +529,7 @@ export {
   fetchCreateTemplates,
   fetchGeoOptions,
   fetchLandingEditorDocument,
+  fetchLandingApprovalSummary,
   fetchLandingNameAvailability,
   fetchLandingPublicIdSuggestion,
   fetchLandings,
@@ -460,8 +540,11 @@ export {
   isValidPublicId,
   landingStatuses,
   publishLandingDraft,
+  rejectLandingForPublish,
+  runLandingBulkOperation,
   refreshLandingLock,
   releaseLandingLock,
+  submitLandingForApproval,
   saveLandingDraftVersion,
   serializeLandingListParams,
   updateLanding
@@ -480,6 +563,11 @@ export type {
   LandingPreviewTokenResponse,
   LandingRow,
   LandingStatus,
+  LandingApprovalSummary,
+  LandingBulkItemDiff,
+  LandingBulkOperation,
+  LandingBulkRequest,
+  LandingBulkResponse,
   LandingVersion,
   ListResponse,
   TemplateOption,

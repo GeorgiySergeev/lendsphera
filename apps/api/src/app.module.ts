@@ -30,6 +30,7 @@ import { CustomThrottlerGuard } from "./common/custom-throttler.guard";
 import { AuditInterceptor } from "./audit/audit.interceptor";
 import { ProductsModule } from "./products/products.module";
 import { PricingModule } from "./pricing/pricing.module";
+import { ApprovalsModule } from "./landings/approvals.module";
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { PricingModule } from "./pricing/pricing.module";
     AssetsModule,
     ProductsModule,
     PricingModule,
+    ApprovalsModule,
     LegacyModule,
     PublishModule,
     EventBusModule,

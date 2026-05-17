@@ -14,7 +14,15 @@ import {
   DialogTitle
 } from "@workspace/ui";
 
-import { buildPreview, getPublishJob, publishLandingDraft } from "../../lib/api/landings";
+import {
+  approveLandingForPublish,
+  buildPreview,
+  fetchLandingApprovalSummary,
+  getPublishJob,
+  publishLandingDraft,
+  rejectLandingForPublish,
+  submitLandingForApproval
+} from "../../lib/api/landings";
 
 type PublishModalProps = {
   landingId: string;
@@ -30,6 +38,7 @@ export function PublishModal({
   onSuccess
 }: PublishModalProps) {
   const [jobId, setJobId] = React.useState<string | null>(null);
+  const [note, setNote] = React.useState("");
 
   const previewQuery = useQuery({
     queryKey: ["landings", landingId, "preview"],
@@ -38,11 +47,32 @@ export function PublishModal({
     staleTime: 0
   });
 
+  const approvalSummaryQuery = useQuery({
+    queryKey: ["landings", landingId, "approval-summary"],
+    queryFn: () => fetchLandingApprovalSummary(landingId),
+    enabled: isOpen && !jobId
+  });
+
   const publishMutation = useMutation({
     mutationFn: () => publishLandingDraft(landingId),
     onSuccess: (data) => {
       setJobId(data.id);
     }
+  });
+
+  const submitMutation = useMutation({
+    mutationFn: () => submitLandingForApproval(landingId),
+    onSuccess: () => approvalSummaryQuery.refetch()
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: () => approveLandingForPublish(landingId, note || undefined),
+    onSuccess: () => approvalSummaryQuery.refetch()
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: () => rejectLandingForPublish(landingId, note || undefined),
+    onSuccess: () => approvalSummaryQuery.refetch()
   });
 
   const jobQuery = useQuery({
@@ -61,7 +91,11 @@ export function PublishModal({
   const handleOpenChange = (open: boolean) => {
     if (!open) {
       setJobId(null);
+      setNote("");
       publishMutation.reset();
+      submitMutation.reset();
+      approveMutation.reset();
+      rejectMutation.reset();
     }
     onOpenChange(open);
   };
@@ -73,6 +107,7 @@ export function PublishModal({
   const jobStatus = jobQuery.data?.status;
   const isComplete = jobStatus === "SUCCESS";
   const isFailed = jobStatus === "FAILED" || jobStatus === "CANCELLED";
+  const canPublish = Boolean(approvalSummaryQuery.data?.readyToPublish);
 
   React.useEffect(() => {
     if (isComplete && onSuccess) {
@@ -92,7 +127,7 @@ export function PublishModal({
           <DialogDescription>
             {jobId
               ? "Your landing page is being built and deployed."
-              : "Review your landing page before publishing. It will be built, minified, and deployed to the CDN."}
+              : "Review your landing page and complete approvals before publishing."}
           </DialogDescription>
         </DialogHeader>
 
@@ -125,13 +160,6 @@ export function PublishModal({
                   <div className="flex flex-col items-center space-y-2">
                     <Loader2 className="h-10 w-10 animate-spin text-primary" />
                     <p className="text-lg font-medium">Publishing in progress...</p>
-                    <p className="text-sm text-muted-foreground text-center max-w-md">
-                      Compiling Tailwind CSS, minifying assets, and uploading to the edge
-                      network.
-                    </p>
-                  </div>
-                  <div className="h-2 w-full max-w-md overflow-hidden rounded-full bg-muted">
-                    <div className="h-full w-1/2 animate-pulse rounded-full bg-primary" />
                   </div>
                 </>
               )}
@@ -139,33 +167,47 @@ export function PublishModal({
                 <div className="flex flex-col items-center space-y-2 text-green-600 dark:text-green-500">
                   <CheckCircle2 className="h-16 w-16 mb-2" />
                   <p className="text-2xl font-bold">Successfully Published!</p>
-                  <a
-                    href={jobQuery.data?.resultUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-sm underline hover:text-green-700"
-                  >
-                    {jobQuery.data?.resultUrl}
-                  </a>
                 </div>
               )}
               {isFailed && (
                 <div className="flex flex-col items-center space-y-2 text-destructive w-full">
                   <XCircle className="h-16 w-16 mb-2" />
                   <p className="text-2xl font-bold">Publish Failed</p>
-                  <p className="text-sm text-center">
-                    An error occurred during the build process.
-                  </p>
-                  {jobQuery.data?.error && (
-                    <div className="mt-4 w-full max-w-2xl bg-destructive/10 p-4 rounded text-xs font-mono overflow-auto max-h-32">
-                      {jobQuery.data.error}
-                    </div>
-                  )}
                 </div>
               )}
             </div>
           )}
         </div>
+
+        {!jobId && (
+          <div className="rounded-md border p-3 space-y-2">
+            <p className="text-sm">
+              Approvals: {approvalSummaryQuery.data?.approvedCount ?? 0}/
+              {approvalSummaryQuery.data?.requireApprovals ?? 0}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Required roles:{" "}
+              {(approvalSummaryQuery.data?.roles ?? []).join(", ") || "ADMIN"}
+            </p>
+            <input
+              className="w-full rounded-md border px-2 py-1 text-sm"
+              placeholder="Optional note"
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+            />
+            <div className="flex gap-2">
+              <Button variant="secondary" onClick={() => submitMutation.mutate()}>
+                Submit
+              </Button>
+              <Button variant="secondary" onClick={() => approveMutation.mutate()}>
+                Approve
+              </Button>
+              <Button variant="outline" onClick={() => rejectMutation.mutate()}>
+                Reject
+              </Button>
+            </div>
+          </div>
+        )}
 
         <DialogFooter>
           {!jobId ? (
@@ -178,7 +220,8 @@ export function PublishModal({
                 disabled={
                   previewQuery.isLoading ||
                   previewQuery.isError ||
-                  publishMutation.isPending
+                  publishMutation.isPending ||
+                  !canPublish
                 }
               >
                 {publishMutation.isPending && (
