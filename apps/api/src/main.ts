@@ -4,6 +4,7 @@ import "reflect-metadata";
 import { Logger } from "@nestjs/common";
 import type { CorsOptions } from "@nestjs/common/interfaces/external/cors-options.interface";
 import { NestFactory } from "@nestjs/core";
+import type { NestExpressApplication } from "@nestjs/platform-express";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import cookieParser from "cookie-parser";
 import { cleanupOpenApiDoc, ZodValidationPipe } from "nestjs-zod";
@@ -24,9 +25,11 @@ async function bootstrap() {
     logger.warn("🛠️  [STARTUP] Running in DEV/TEST mode — default secrets may be in use");
   }
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.enableShutdownHooks();
   app.setGlobalPrefix("api");
+  app.useBodyParser("json", { limit: "10mb" });
+  app.useBodyParser("urlencoded", { extended: true, limit: "10mb" });
 
   // ============ COOKIE PARSER ============
   // Must be registered BEFORE any route handler that reads `req.cookies`.
