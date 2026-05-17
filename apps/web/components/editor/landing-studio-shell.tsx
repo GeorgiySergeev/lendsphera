@@ -597,8 +597,8 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
   }
 
   return (
-    <div className="relative h-full">
-      <div className="h-full overflow-hidden rounded-xl border bg-background shadow-sm">
+    <div className="relative h-[calc(100dvh)]">
+      <div className="h-full overflow-hidden  border bg-background shadow-sm">
         <div ref={studioRootRef} className="h-full w-full" />
       </div>
     </div>

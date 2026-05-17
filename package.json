@@ -23,7 +23,9 @@
     "openapi:generate": "pnpm --filter @workspace/api-client generate",
     "openapi:sync": "pnpm openapi:export && pnpm openapi:generate",
     "openapi:check": "pnpm openapi:export && git diff --exit-code openapi/openapi.json",
-    "prepare": "husky"
+    "prepare": "husky",
+    "visual": "pnpm --filter @workspace/widgets visual",
+    "visual:update": "pnpm --filter @workspace/widgets visual:update"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,mjs,cjs,json,md,css,yml,yaml}": [

@@ -5,7 +5,9 @@
     "declarationMap": true,
     "emitDeclarationOnly": false,
     "noEmit": false,
-    "outDir": "dist"
+    "outDir": "dist",
+    "rootDir": "src"
   },
-  "exclude": ["src/**/*.test.ts", "vitest.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.stories.tsx", "vitest.config.ts"]
 }

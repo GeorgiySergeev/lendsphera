@@ -27,10 +27,10 @@ export default [
           allowDefaultProject: [
             "apps/api/scripts/*.ts",
             "packages/types/tsup.config.ts",
-            "packages/widgets/scripts/*.ts",
-            "packages/widgets/vite.config.ts",
             "playwright.config.ts",
-            "tests/e2e/*.ts"
+            "tests/e2e/*.ts",
+            "tools/legacy-bridge-php/deploy/*.ts",
+            "vitest.workspace.ts"
           ]
         },
         tsconfigRootDir: import.meta.dirname

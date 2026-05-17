@@ -1,0 +1,18 @@
+.lsw-wheel {
+  padding: 20px;
+  border-radius: 999px;
+  border: 2px dashed #475569;
+  text-align: center;
+}
+.lsw-wheel__segments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+.lsw-wheel__segments span {
+  background: #e2e8f0;
+  border-radius: 999px;
+  padding: 4px 8px;
+}
