@@ -1,7 +1,9 @@
 export type RuntimeVars = {
   landingId: string;
   versionId: string | null;
+  generatedAt: string;
   cachedUntil: string;
+  signature: string;
   vars: {
     LS_PRICE: string;
     LS_OLD_PRICE: string;

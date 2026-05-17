@@ -6,11 +6,19 @@ import { RedisModule } from "../redis/redis.module";
 import { LandingContextResolver } from "./landing-context.resolver";
 import { LandingsController } from "./landings.controller";
 import { LandingsService } from "./landings.service";
+import { RuntimeVarsController } from "./runtime-vars.controller";
+import { RuntimeVarsGuard } from "./runtime-vars.guard";
+import { RuntimeVarsService } from "./runtime-vars.service";
 
 @Module({
   imports: [PrismaModule, RedisModule, AuditModule],
-  controllers: [LandingsController],
-  providers: [LandingsService, LandingContextResolver],
+  controllers: [LandingsController, RuntimeVarsController],
+  providers: [
+    LandingsService,
+    LandingContextResolver,
+    RuntimeVarsService,
+    RuntimeVarsGuard
+  ],
   exports: [LandingsService]
 })
 export class LandingsModule {}

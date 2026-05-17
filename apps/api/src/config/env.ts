@@ -12,12 +12,12 @@ const BLOCKED_SECRET_VALUES = [
   "test-secret",
   "temporary",
   "your-secret-here",
-  "replace-me",
+  "replace-me"
 ] as const;
 
 const isBlockedSecret = (value: string): boolean =>
   BLOCKED_SECRET_VALUES.some((blocked) =>
-    value.toLowerCase().includes(blocked.toLowerCase()),
+    value.toLowerCase().includes(blocked.toLowerCase())
   );
 
 // ────────────────────────────────────────────────────────────────
@@ -25,9 +25,7 @@ const isBlockedSecret = (value: string): boolean =>
 // ────────────────────────────────────────────────────────────────
 const EnvSchema = z
   .object({
-    NODE_ENV: z
-      .enum(["development", "test", "production"])
-      .default("development"),
+    NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     PORT: z.coerce.number().int().positive().default(4000),
     DATABASE_URL: z.string().url(),
     REDIS_URL: z.string().url().default("redis://localhost:6379"),
@@ -64,6 +62,11 @@ const EnvSchema = z
       .string()
       .min(16, "COOKIE_SECRET must be at least 16 characters")
       .default("dev-cookie-secret-change-me-in-prod"),
+    LS_BRIDGE_KEY: z.string().min(16).default("dev-ls-bridge-key-change-me"),
+    LS_BRIDGE_HMAC_SECRET: z
+      .string()
+      .min(16)
+      .default("dev-ls-bridge-hmac-secret-change-me"),
 
     // Google OAuth — all four must be set together or all omitted
     // Empty strings are treated as "not set" to avoid partial-config errors
@@ -83,7 +86,7 @@ const EnvSchema = z
     GOOGLE_OAUTH_SUCCESS_REDIRECT: z.preprocess(
       (v) => (v === "" ? undefined : v),
       z.string().url().optional()
-    ),
+    )
   })
   .superRefine((data, ctx) => {
     // Ensure Google OAuth vars are all-or-nothing
@@ -91,7 +94,7 @@ const EnvSchema = z
       data.GOOGLE_CLIENT_ID,
       data.GOOGLE_CLIENT_SECRET,
       data.GOOGLE_CALLBACK_URL,
-      data.GOOGLE_OAUTH_SUCCESS_REDIRECT,
+      data.GOOGLE_OAUTH_SUCCESS_REDIRECT
     ];
     const setCount = googleVars.filter(Boolean).length;
     if (setCount > 0 && setCount < 4) {
@@ -99,7 +102,7 @@ const EnvSchema = z
         code: "custom",
         path: ["GOOGLE_CLIENT_ID"],
         message:
-          "Google OAuth requires all four variables to be set: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_CALLBACK_URL, GOOGLE_OAUTH_SUCCESS_REDIRECT",
+          "Google OAuth requires all four variables to be set: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_CALLBACK_URL, GOOGLE_OAUTH_SUCCESS_REDIRECT"
       });
     }
     // ============ PRODUCTION-SPECIFIC VALIDATION ============
@@ -115,9 +118,9 @@ const EnvSchema = z
             `Got: "${data.JWT_ACCESS_SECRET.substring(0, 10)}..."`,
             "",
             "Generate a strong random secret with:",
-            '  node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
+            "  node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
           ].join("\n"),
-          input: data.JWT_ACCESS_SECRET,
+          input: data.JWT_ACCESS_SECRET
         });
       }
 
@@ -131,9 +134,9 @@ const EnvSchema = z
             `Got: "${data.JWT_REFRESH_SECRET.substring(0, 10)}..."`,
             "",
             "Generate a strong random secret with:",
-            '  node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
+            "  node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
           ].join("\n"),
-          input: data.JWT_REFRESH_SECRET,
+          input: data.JWT_REFRESH_SECRET
         });
       }
 
@@ -142,9 +145,8 @@ const EnvSchema = z
         ctx.addIssue({
           code: "custom",
           path: ["JWT_ACCESS_SECRET"],
-          message:
-            "JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be DIFFERENT values",
-          input: data.JWT_ACCESS_SECRET,
+          message: "JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be DIFFERENT values",
+          input: data.JWT_ACCESS_SECRET
         });
       }
 
@@ -157,9 +159,9 @@ const EnvSchema = z
             "COOKIE_SECRET contains a known development value.",
             "This MUST be changed for production.",
             "",
-            "Generate with: openssl rand -base64 32",
+            "Generate with: openssl rand -base64 32"
           ].join("\n"),
-          input: data.COOKIE_SECRET,
+          input: data.COOKIE_SECRET
         });
       }
     }
@@ -189,10 +191,12 @@ function parseEnv() {
     WEB_ORIGIN: process.env.WEB_ORIGIN,
     RUNTIME_ORIGIN: process.env.RUNTIME_ORIGIN,
     COOKIE_SECRET: process.env.COOKIE_SECRET,
+    LS_BRIDGE_KEY: process.env.LS_BRIDGE_KEY,
+    LS_BRIDGE_HMAC_SECRET: process.env.LS_BRIDGE_HMAC_SECRET,
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
     GOOGLE_CALLBACK_URL: process.env.GOOGLE_CALLBACK_URL,
-    GOOGLE_OAUTH_SUCCESS_REDIRECT: process.env.GOOGLE_OAUTH_SUCCESS_REDIRECT,
+    GOOGLE_OAUTH_SUCCESS_REDIRECT: process.env.GOOGLE_OAUTH_SUCCESS_REDIRECT
   });
 
   if (!result.success) {

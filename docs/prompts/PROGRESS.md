@@ -21,9 +21,9 @@
 | ------ | --- | ------------------------- | ---------------------------------------------------------------------------------------- | ------------ |
 | [ x]   | 1.1 | Products API              | [1.1-products-api.md](./phase-1-inventory/1.1-products-api.md)                           |              |
 | [ x]   | 1.2 | Geos + Prices API         | [1.2-geos-and-prices-api.md](./phase-1-inventory/1.2-geos-and-prices-api.md)             |              |
-| [ ]    | 1.3 | Landings API              | [1.3-landings-api.md](./phase-1-inventory/1.3-landings-api.md)                           |              |
-| [ ]    | 1.4 | Legacy inventory importer | [1.4-legacy-inventory-importer.md](./phase-1-inventory/1.4-legacy-inventory-importer.md) |              |
-| [ ]    | 1.5 | Read-only CRM UI          | [1.5-readonly-crm-ui.md](./phase-1-inventory/1.5-readonly-crm-ui.md)                     |              |
+| [ x]   | 1.3 | Landings API              | [1.3-landings-api.md](./phase-1-inventory/1.3-landings-api.md)                           |              |
+| [x ]   | 1.4 | Legacy inventory importer | [1.4-legacy-inventory-importer.md](./phase-1-inventory/1.4-legacy-inventory-importer.md) |              |
+| [x ]   | 1.5 | Read-only CRM UI          | [1.5-readonly-crm-ui.md](./phase-1-inventory/1.5-readonly-crm-ui.md)                     |              |
 
 ### Phase 2 · Legacy Bridge — 0 / 6
 
