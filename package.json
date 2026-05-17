@@ -11,6 +11,8 @@
     "build": "turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
+    "check": "pnpm lint && pnpm typecheck",
+    "precommit": "lint-staged",
     "test": "turbo test",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",

@@ -15,6 +15,7 @@ import { CurrentUser, type AuthUser } from "../common/current-user.decorator";
 import { JwtAuthGuard } from "../common/jwt-auth.guard";
 import { ADMIN_ROLES, READ_ROLES, Roles, WRITE_ROLES } from "../common/roles";
 import { RolesGuard } from "../common/roles.guard";
+import { LandingContextResolver } from "./landing-context.resolver";
 import {
   BulkLandingDeleteDto,
   BulkLandingStatusDto,
@@ -33,7 +34,10 @@ import { LandingsService } from "./landings.service";
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller("landings")
 export class LandingsController {
-  constructor(private readonly landings: LandingsService) {}
+  constructor(
+    private readonly landings: LandingsService,
+    private readonly landingContext: LandingContextResolver
+  ) {}
 
   @Roles(...READ_ROLES)
   @Get()
@@ -83,10 +87,26 @@ export class LandingsController {
     return this.landings.editor(id);
   }
 
+  @Roles(...READ_ROLES)
+  @Get(":id/context")
+  context(@Param("id") id: string) {
+    return this.landingContext.resolve(id);
+  }
+
+  @Roles(...READ_ROLES)
+  @Get(":id/versions")
+  versions(@Param("id") id: string, @Query() query: LandingListQueryDto) {
+    return this.landings.versions(id, query);
+  }
+
   @Roles(...WRITE_ROLES)
   @Patch(":id")
-  update(@Param("id") id: string, @Body() dto: UpdateLandingDto) {
-    return this.landings.update(id, dto);
+  update(
+    @Param("id") id: string,
+    @Body() dto: UpdateLandingDto,
+    @CurrentUser() user: AuthUser
+  ) {
+    return this.landings.update(id, dto, user);
   }
 
   @Roles(...ADMIN_ROLES)

@@ -60,9 +60,15 @@ export class GeosController {
   }
 
   @Roles(...READ_ROLES)
-  @Get(":id")
-  get(@Param("id") id: string) {
+  @Get("id/:id")
+  getById(@Param("id") id: string) {
     return this.geos.get(id);
+  }
+
+  @Roles(...READ_ROLES)
+  @Get(":code")
+  getByCode(@Param("code") code: string) {
+    return this.geos.getByCode(code);
   }
 
   @Roles(...WRITE_ROLES)

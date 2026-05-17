@@ -25,10 +25,12 @@ export default [
       parserOptions: {
         projectService: {
           allowDefaultProject: [
+            "apps/api/scripts/*.ts",
+            "packages/types/tsup.config.ts",
             "packages/widgets/scripts/*.ts",
             "packages/widgets/vite.config.ts",
-            "tests/e2e/*.ts",
-            "apps/api/scripts/*.ts"
+            "playwright.config.ts",
+            "tests/e2e/*.ts"
           ]
         },
         tsconfigRootDir: import.meta.dirname

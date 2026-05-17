@@ -37,10 +37,19 @@ export class LandingsService {
 
   async list(query: LandingListQueryDto) {
     const { skip, take, page, limit } = getPagination(query);
-    const geoFilters = this.parseListFilter(query.geo);
+    const geoFilters = this.parseListFilter(query.geo ?? query.geoCode);
+    const search = query.q ?? query.search;
     const where: Prisma.LandingWhereInput = {
       deletedAt: query.includeDeleted ? undefined : null,
       status: query.status,
+      productId: query.productId,
+      legacyFrom: query.origin
+        ? {
+            source: {
+              equals: query.origin as Prisma.EnumLegacySourceFilter["equals"]
+            }
+          }
+        : undefined,
       geo: geoFilters.length
         ? {
             OR: [
@@ -65,12 +74,12 @@ export class LandingsService {
             ]
           }
         : undefined,
-      OR: query.search
+      OR: search
         ? [
-            { publicId: { contains: query.search, mode: "insensitive" } },
-            { name: { contains: query.search, mode: "insensitive" } },
-            { slug: { contains: query.search, mode: "insensitive" } },
-            { notes: { contains: query.search, mode: "insensitive" } }
+            { publicId: { contains: search, mode: "insensitive" } },
+            { name: { contains: search, mode: "insensitive" } },
+            { slug: { contains: search, mode: "insensitive" } },
+            { notes: { contains: search, mode: "insensitive" } }
           ]
         : undefined
     };
@@ -216,17 +225,89 @@ export class LandingsService {
     }
   }
 
-  async update(id: string, dto: UpdateLandingDto) {
+  async update(id: string, dto: UpdateLandingDto, user: AuthUser) {
+    const current = await this.prisma.landing.findUniqueOrThrow({
+      where: { id },
+      include: { currentVersion: true }
+    });
+    const nextStatus = dto.status;
+    const statusChanged = Boolean(nextStatus && nextStatus !== current.status);
+    if (statusChanged && nextStatus) {
+      this.assertStatusTransition(current.status, nextStatus, user.role);
+      if (
+        nextStatus === LandingStatus.PUBLISHED &&
+        !(dto.templateId ?? current.templateId)
+      ) {
+        throw new ConflictException("Cannot publish landing without templateId.");
+      }
+    }
+
     try {
-      return await this.prisma.landing.update({
-        where: { id },
-        data: {
-          ...dto,
-          pixels: toInputJson(dto.pixels),
-          postbacks: toInputJson(dto.postbacks),
-          seoMeta: toInputJson(dto.seoMeta),
-          settings: toInputJson(dto.settings)
-        } as Prisma.LandingUncheckedUpdateInput
+      return await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.landing.update({
+          where: { id },
+          data: {
+            ...dto,
+            pixels: toInputJson(dto.pixels),
+            postbacks: toInputJson(dto.postbacks),
+            seoMeta: toInputJson(dto.seoMeta),
+            settings: toInputJson(dto.settings),
+            publishedAt:
+              statusChanged && nextStatus === LandingStatus.PUBLISHED
+                ? new Date()
+                : undefined
+          } as Prisma.LandingUncheckedUpdateInput
+        });
+
+        if (statusChanged && nextStatus) {
+          await tx.auditLog.create({
+            data: {
+              action: AuditAction.UPDATE,
+              entity: "Landing",
+              entityId: id,
+              userId: user.id,
+              diff: {
+                field: "status",
+                old: current.status,
+                new: nextStatus
+              } as Prisma.InputJsonValue
+            }
+          });
+
+          if (nextStatus === LandingStatus.PUBLISHED) {
+            const highest = await tx.version.findFirst({
+              where: { landingId: id },
+              orderBy: { versionNum: "desc" },
+              select: { versionNum: true }
+            });
+            const nextVersion = (highest?.versionNum ?? 0) + 1;
+            const baseVersion = current.currentVersion;
+            const createdVersion = await tx.version.create({
+              data: {
+                landingId: id,
+                versionNum: nextVersion,
+                status: VersionStatus.MANUAL,
+                grapesJson: (baseVersion?.grapesJson ?? {}) as Prisma.InputJsonValue,
+                placeholders: (baseVersion?.placeholders ?? {}) as Prisma.InputJsonValue,
+                html: baseVersion?.html,
+                css: baseVersion?.css,
+                customCss: baseVersion?.customCss,
+                customJs: baseVersion?.customJs,
+                snapshotS3Key: baseVersion?.snapshotS3Key,
+                snapshotSize: baseVersion?.snapshotSize,
+                authorId: user.id,
+                message: "Auto-versioned on publish"
+              }
+            });
+
+            await tx.landing.update({
+              where: { id },
+              data: { currentVersionId: createdVersion.id }
+            });
+          }
+        }
+
+        return updated;
       });
     } catch (error) {
       mapPrismaError(error);
@@ -260,6 +341,22 @@ export class LandingsService {
     });
 
     return { count: result.count };
+  }
+
+  async versions(id: string, query: LandingListQueryDto) {
+    const { skip, take, page, limit } = getPagination(query);
+    const where: Prisma.VersionWhereInput = { landingId: id };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.version.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { versionNum: "desc" }
+      }),
+      this.prisma.version.count({ where })
+    ]);
+
+    return listResponse(items, total, page, limit);
   }
 
   async duplicate(id: string, dto: DuplicateLandingDto, user: AuthUser) {
@@ -490,5 +587,28 @@ export class LandingsService {
 
   private escapeRegex(value: string) {
     return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  private assertStatusTransition(from: LandingStatus, to: LandingStatus, role: Role) {
+    if (from === to) return;
+
+    const isPrivileged = role === Role.ADMIN || role === Role.OWNER;
+    if (
+      (to === LandingStatus.PUBLISHED || to === LandingStatus.ARCHIVED) &&
+      !isPrivileged
+    ) {
+      throw new ForbiddenException("Only ADMIN or OWNER can publish/archive landings.");
+    }
+
+    const allowed: Record<LandingStatus, LandingStatus[]> = {
+      [LandingStatus.DRAFT]: [LandingStatus.IN_REVIEW],
+      [LandingStatus.IN_REVIEW]: [LandingStatus.DRAFT, LandingStatus.PUBLISHED],
+      [LandingStatus.PUBLISHED]: [LandingStatus.ARCHIVED],
+      [LandingStatus.ARCHIVED]: []
+    };
+
+    if (!allowed[from]?.includes(to)) {
+      throw new ConflictException(`Invalid landing status transition: ${from} -> ${to}`);
+    }
   }
 }

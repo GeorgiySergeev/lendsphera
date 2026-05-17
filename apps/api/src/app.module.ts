@@ -27,6 +27,7 @@ import { WidgetsModule } from "./widgets/widgets.module";
 import { CustomThrottlerGuard } from "./common/custom-throttler.guard";
 import { AuditInterceptor } from "./audit/audit.interceptor";
 import { ProductsModule } from "./products/products.module";
+import { PricingModule } from "./pricing/pricing.module";
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { ProductsModule } from "./products/products.module";
     WidgetsModule,
     AssetsModule,
     ProductsModule,
+    PricingModule,
     LegacyModule,
     PublishModule
   ],

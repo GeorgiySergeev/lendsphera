@@ -7,7 +7,7 @@ import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import cookieParser from "cookie-parser";
-import type { Request, Response } from "express";
+import type { Application } from "express";
 import { cleanupOpenApiDoc, ZodValidationPipe } from "nestjs-zod";
 
 import { AppModule } from "./app.module";
@@ -97,7 +97,8 @@ async function bootstrap() {
   SwaggerModule.setup("docs", app, cleanedDocument);
   SwaggerModule.setup("v1/docs", app, cleanedDocument);
 
-  app.getHttpAdapter().get("/v1/openapi.json", (_req: Request, res: Response) => {
+  const expressApp = app.getHttpAdapter().getInstance() as Application;
+  expressApp.get("/v1/openapi.json", (_req, res) => {
     res.json(cleanedDocument);
   });
 
