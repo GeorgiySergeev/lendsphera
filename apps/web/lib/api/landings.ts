@@ -82,6 +82,17 @@ type LandingRow = {
   } | null;
 };
 
+type LandingDetail = LandingRow & {
+  owner?: {
+    id: string;
+    email: string;
+    name?: string | null;
+    role?: string;
+  } | null;
+  currentVersion?: LandingVersion | null;
+  versions?: LandingVersion[];
+};
+
 type LandingVersion = {
   id: string;
   versionNum: number;
@@ -285,6 +296,21 @@ async function createLanding(payload: CreateLandingPayload) {
   return response.data;
 }
 
+async function fetchLanding(landingId: string) {
+  const response = await apiClient.get<LandingDetail>(`/landings/${landingId}`);
+
+  return response.data;
+}
+
+async function updateLanding(landingId: string, payload: Partial<CreateLandingPayload>) {
+  const response = await apiClient.patch<LandingDetail>(
+    `/landings/${landingId}`,
+    payload
+  );
+
+  return response.data;
+}
+
 async function fetchLandingVersions(landingId: string) {
   const response = await apiClient.get<LandingVersion[]>(
     `/landings/${landingId}/versions`
@@ -403,6 +429,7 @@ export {
   createLanding,
   deleteLanding,
   duplicateLanding,
+  fetchLanding,
   fetchCategoryOptions,
   fetchCreateTemplates,
   fetchGeoOptions,
@@ -420,12 +447,14 @@ export {
   refreshLandingLock,
   releaseLandingLock,
   saveLandingDraftVersion,
-  serializeLandingListParams
+  serializeLandingListParams,
+  updateLanding
 };
 export type {
   CategoryOption,
   CreateLandingPayload,
   GeoOption,
+  LandingDetail,
   LandingEditorDocument,
   LandingEditorDraftPayload,
   LandingEditorDraftResponse,

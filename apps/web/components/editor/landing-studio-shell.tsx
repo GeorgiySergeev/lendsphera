@@ -20,15 +20,20 @@ import { Button } from "@workspace/ui";
 
 import {
   acquireLandingLock,
+  fetchLanding,
   fetchLandingEditorDocument,
   refreshLandingLock,
   releaseLandingLock,
   saveLandingDraftVersion,
+  updateLanding,
+  type LandingDetail,
   type LandingEditorDocument,
   type LandingEditorDraftPayload
 } from "../../lib/api/landings";
 import { apiClient } from "../../lib/api/client";
+import { componentsApi } from "../../lib/api/components";
 import { toast } from "../../lib/toast";
+import { useDashboardTopbarStore } from "../../stores/dashboard-topbar-store";
 
 type LandingStudioShellProps = {
   landingId: string;
@@ -122,6 +127,91 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
   );
   const [isReady, setIsReady] = React.useState(false);
   const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [landing, setLanding] = React.useState<LandingDetail | null>(null);
+  const [landingMetaError, setLandingMetaError] = React.useState<string | null>(null);
+  const [isNameSaving, setIsNameSaving] = React.useState(false);
+  const setLandingContext = useDashboardTopbarStore((state) => state.setLandingContext);
+  const clearLandingContext = useDashboardTopbarStore(
+    (state) => state.clearLandingContext
+  );
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function loadLandingMeta() {
+      try {
+        setLandingMetaError(null);
+        const result = await fetchLanding(landingId);
+        if (cancelled) {
+          return;
+        }
+        setLanding(result);
+      } catch {
+        if (!cancelled) {
+          setLandingMetaError("Landing details unavailable");
+        }
+      }
+    }
+
+    void loadLandingMeta();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [landingId]);
+
+  const renameLanding = React.useCallback(
+    async (nextNameValue: string) => {
+      const nextName = nextNameValue.trim();
+      if (!landing || !nextName || nextName === landing.name) {
+        return;
+      }
+
+      try {
+        setIsNameSaving(true);
+        const updated = await updateLanding(landingId, { name: nextName });
+        setLanding((current) =>
+          current ? { ...current, ...updated, name: updated.name ?? nextName } : updated
+        );
+        toast.success("Landing renamed", updated.name ?? nextName);
+      } catch {
+        toast.error("Could not rename landing");
+      } finally {
+        setIsNameSaving(false);
+      }
+    },
+    [landing, landingId]
+  );
+
+  React.useEffect(() => {
+    if (!landing) {
+      return;
+    }
+
+    setLandingContext({
+      id: landing.id,
+      name: landing.name,
+      status: landing.status,
+      publicId: landing.publicId,
+      geoName: landing.geo?.name,
+      templateName: landing.template?.name,
+      updatedAt: landing.updatedAt,
+      metaError: landingMetaError,
+      isRenaming: isNameSaving,
+      onRename: renameLanding
+    });
+
+    return () => {
+      clearLandingContext(landing.id);
+    };
+  }, [
+    clearLandingContext,
+    isNameSaving,
+    landing,
+    landingMetaError,
+    renameLanding,
+    setLandingContext
+  ]);
 
   React.useEffect(() => {
     let heartbeatInterval: NodeJS.Timeout | null = null;
@@ -197,6 +287,9 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
       licenseKey: "95ae55b49e634c958af62f116ee5d509c8d14c5e7b5c4b1688b56a0255b512ad",
       theme: "dark",
       customTheme: studioTheme,
+      canvas: {
+        scripts: [studioTailwindScriptUrl]
+      },
       assets: {
         storageType: "self",
         providerId: "dashboard-media-library",
@@ -268,7 +361,34 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
                   {
                     id: "blocks",
                     label: "Blocks",
-                    children: { type: "panelBlocks", style: { height: "100%" } }
+                    children: {
+                      type: "tabs",
+                      value: "regular",
+                      tabs: [
+                        {
+                          id: "regular",
+                          label: "Regular",
+                          children: {
+                            type: "panelBlocks",
+                            symbols: false,
+                            style: { height: "100%" },
+                            blocks: ({ blocks }: { blocks: any[] }) =>
+                              blocks.filter((block) => !isStudioLibraryBlock(block))
+                          }
+                        },
+                        {
+                          id: "components",
+                          label: "Components",
+                          children: {
+                            type: "panelBlocks",
+                            symbols: false,
+                            style: { height: "100%" },
+                            blocks: ({ blocks }: { blocks: any[] }) =>
+                              blocks.filter((block) => isStudioLibraryBlock(block))
+                          }
+                        }
+                      ]
+                    }
                   },
                   {
                     id: "layers",
@@ -408,7 +528,8 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
         lightGalleryComponent.init({}),
         swiperComponent.init({}),
         rteTinyMce.init({}),
-        canvasEmptyState.init({})
+        canvasEmptyState.init({}),
+        createStudioComponentsBlocksPlugin()
       ]
     }),
     [landingId]
@@ -437,6 +558,7 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
             return;
           }
           editorRef.current = editor;
+          ensureStudioTailwindCanvas(editor);
           setIsReady(true);
         },
         onDestroy: () => {
@@ -463,7 +585,7 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
 
   if (loadError && !isReady) {
     return (
-      <div className="flex min-h-[calc(100vh-2rem)] items-center justify-center rounded-xl border bg-background p-8 text-center shadow-sm">
+      <div className="flex min-h-[calc(100dvh-5rem)] items-center justify-center rounded-xl border bg-background p-8 text-center shadow-sm">
         <div className="max-w-md space-y-4">
           <p className="text-sm text-destructive">{loadError}</p>
           <Button onClick={() => window.location.reload()} variant="outline">
@@ -475,8 +597,10 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
   }
 
   return (
-    <div className="relative h-[calc(100vh-2rem)] overflow-hidden rounded-xl border bg-background shadow-sm">
-      <div ref={studioRootRef} className="h-full w-full" />
+    <div className="relative h-[calc(100dvh-5rem)]">
+      <div className="h-full overflow-hidden rounded-xl border bg-background shadow-sm">
+        <div ref={studioRootRef} className="h-full w-full" />
+      </div>
     </div>
   );
 }
@@ -555,6 +679,224 @@ function extractFirstPageHtml(project: unknown) {
 }
 
 export { LandingStudioShell };
+
+type StudioComponentBlockItem = {
+  categoryLabel: string;
+  html: string;
+  id: string;
+  name: string;
+};
+
+const studioLibraryBlockPrefix = "library-component:";
+const studioTailwindScriptUrl = "https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4";
+const studioComponentCssCache = new Map<string, string>();
+const studioComponentDetailRequests = new Map<string, Promise<string>>();
+
+function createStudioComponentsBlocksPlugin() {
+  return (editor: any) => {
+    void registerStudioComponentBlocks(editor);
+
+    editor.on("canvas:frame:load", () => ensureStudioTailwindCanvas(editor));
+    editor.on("canvas:load", () => ensureStudioTailwindCanvas(editor));
+    editor.on("component:add", () => {
+      window.setTimeout(() => ensureStudioTailwindCanvas(editor), 50);
+    });
+
+    editor.on("block:drag:stop", (_component: unknown, block: any) => {
+      const blockId = getStudioBlockId(block);
+
+      if (!blockId.startsWith(studioLibraryBlockPrefix)) {
+        return;
+      }
+
+      const componentId = blockId.replace(studioLibraryBlockPrefix, "");
+      void componentsApi.trackUsage(componentId).catch(() => {});
+      void applyStudioComponentCss(editor, componentId);
+      ensureStudioTailwindCanvas(editor);
+    });
+  };
+}
+
+async function registerStudioComponentBlocks(editor: any) {
+  try {
+    const items = await loadStudioComponentBlocks();
+
+    items.forEach((item, index) => {
+      if (editor.Blocks.get(item.id)) {
+        return;
+      }
+
+      editor.Blocks.add(
+        item.id,
+        {
+          label: formatStudioComponentBlockLabel(item.name),
+          category: {
+            id: `components-library:${toStudioCategoryId(item.categoryLabel)}`,
+            label: item.categoryLabel || "Components"
+          },
+          media: buildStudioComponentBlockMedia(item),
+          content: item.html,
+          select: true
+        },
+        { at: index }
+      );
+    });
+  } catch (error) {
+    console.error("Failed to register Studio component blocks", error);
+  }
+}
+
+async function loadStudioComponentBlocks(): Promise<StudioComponentBlockItem[]> {
+  const response = await componentsApi.list({
+    isPublic: true,
+    limit: 100,
+    page: 1,
+    sortBy: "usageCount",
+    sortDir: "desc"
+  });
+
+  return response.data.map((item) => ({
+    id: `${studioLibraryBlockPrefix}${item.id}`,
+    name: item.name,
+    html: item.html,
+    categoryLabel: item.category.name
+  }));
+}
+
+function isStudioLibraryBlock(block: any) {
+  return getStudioBlockId(block).startsWith(studioLibraryBlockPrefix);
+}
+
+function getStudioBlockId(block: any) {
+  const blockId =
+    typeof block?.getId === "function"
+      ? block.getId()
+      : (block?.id ?? block?.attributes?.id);
+
+  return typeof blockId === "string" ? blockId : "";
+}
+
+function ensureStudioTailwindCanvas(editor: any) {
+  const iframeDocs = getStudioCanvasDocuments(editor);
+
+  iframeDocs.forEach((iframeDoc) => {
+    if (!iframeDoc.head) {
+      return;
+    }
+
+    if (!iframeDoc.querySelector('script[data-landsphera-tailwind="true"]')) {
+      const script = iframeDoc.createElement("script");
+      script.dataset.landspheraTailwind = "true";
+      script.src = studioTailwindScriptUrl;
+      iframeDoc.head.appendChild(script);
+    }
+
+    if (!iframeDoc.querySelector('style[data-landsphera-tailwind-theme="true"]')) {
+      const themeStyle = iframeDoc.createElement("style");
+      themeStyle.dataset.landspheraTailwindTheme = "true";
+      themeStyle.type = "text/tailwindcss";
+      themeStyle.textContent = `
+        @theme {
+          --font-sans: ui-sans-serif, system-ui, sans-serif;
+        }
+      `;
+      iframeDoc.head.appendChild(themeStyle);
+    }
+  });
+}
+
+function getStudioCanvasDocuments(editor: any) {
+  const docs = new Set<Document>();
+  const canvasDoc = editor?.Canvas?.getDocument?.();
+
+  if (canvasDoc) {
+    docs.add(canvasDoc);
+  }
+
+  document
+    .querySelectorAll<HTMLIFrameElement>(".gs-studio-root iframe, .gjs-frame, iframe")
+    .forEach((iframe) => {
+      try {
+        const iframeDoc = iframe.contentDocument;
+        if (iframeDoc) {
+          docs.add(iframeDoc);
+        }
+      } catch {
+        // Cross-origin iframes are ignored; Studio canvas iframes are same-origin.
+      }
+    });
+
+  return Array.from(docs);
+}
+
+function buildStudioComponentBlockMedia(item: StudioComponentBlockItem) {
+  const accent = getStudioComponentAccent(item.categoryLabel);
+
+  return `<svg viewBox="0 0 24 24" role="img" aria-hidden="true" style="display:block;height:38px;width:38px;margin:auto;color:${accent};fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;">
+    <rect x="4" y="4" width="7" height="7" rx="1.8" opacity=".85"></rect>
+    <rect x="13" y="4" width="7" height="7" rx="1.8" opacity=".45"></rect>
+    <rect x="4" y="13" width="7" height="7" rx="1.8" opacity=".45"></rect>
+    <path d="M14 15.5h5"></path>
+    <path d="M14 18.5h3"></path>
+  </svg>`;
+}
+
+async function applyStudioComponentCss(editor: any, componentId: string) {
+  const cachedCss = studioComponentCssCache.get(componentId);
+  if (cachedCss) {
+    editor.Css.addRules(cachedCss);
+    return;
+  }
+
+  const pendingRequest = studioComponentDetailRequests.get(componentId);
+  if (pendingRequest) {
+    const css = await pendingRequest;
+    if (css) {
+      editor.Css.addRules(css);
+    }
+    return;
+  }
+
+  const request = componentsApi
+    .get(componentId)
+    .then((detail) => detail.css?.trim() ?? "")
+    .finally(() => {
+      studioComponentDetailRequests.delete(componentId);
+    });
+
+  studioComponentDetailRequests.set(componentId, request);
+
+  const css = await request;
+  if (!css) {
+    return;
+  }
+
+  studioComponentCssCache.set(componentId, css);
+  editor.Css.addRules(css);
+}
+
+function formatStudioComponentBlockLabel(value: string) {
+  const normalized = value.split(/\s+/).filter(Boolean).join(" ");
+
+  return normalized.length > 20 ? `${normalized.slice(0, 17).trimEnd()}...` : normalized;
+}
+
+function getStudioComponentAccent(categoryLabel: string) {
+  const palette = ["#8ab4f8", "#a7f3d0", "#fda4af", "#fde68a", "#c4b5fd"];
+  const hash = Array.from(categoryLabel || "Components").reduce(
+    (total, char) => total + char.charCodeAt(0),
+    0
+  );
+
+  return palette[hash % palette.length];
+}
+
+function toStudioCategoryId(value: string) {
+  return (value || "components")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
 
 async function loadStudioTemplates(): Promise<StudioTemplate[]> {
   const [localResult, platformResult] = await Promise.allSettled([

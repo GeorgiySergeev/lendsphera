@@ -2,16 +2,19 @@
 
 import {
   Bell,
+  Check,
   ChevronsUpDown,
   LogOut,
   Menu,
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
+  Pencil,
   Search,
   Settings,
   Sun,
-  User
+  User,
+  X
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -53,6 +56,10 @@ import {
 } from "@workspace/ui";
 
 import { useAuthStore } from "../../stores/auth-store";
+import {
+  useDashboardTopbarStore,
+  type DashboardLandingTopbarContext
+} from "../../stores/dashboard-topbar-store";
 import { dashboardNavItems } from "./navigation";
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
@@ -250,6 +257,7 @@ function DashboardTopBar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
             className="h-10 pl-9"
           />
         </div>
+        <DashboardLandingContextPanel />
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -271,6 +279,134 @@ function DashboardTopBar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
         </div>
       </div>
     </header>
+  );
+}
+
+function DashboardLandingContextPanel() {
+  const landingContext = useDashboardTopbarStore((state) => state.landingContext);
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [draftName, setDraftName] = React.useState("");
+
+  React.useEffect(() => {
+    if (!landingContext) {
+      setIsEditing(false);
+      setDraftName("");
+      return;
+    }
+
+    if (!isEditing) {
+      setDraftName(landingContext.name);
+    }
+  }, [isEditing, landingContext]);
+
+  if (!landingContext) {
+    return null;
+  }
+
+  const saveName = async () => {
+    const nextName = draftName.trim();
+    if (!nextName || nextName === landingContext.name) {
+      setIsEditing(false);
+      setDraftName(landingContext.name);
+      return;
+    }
+
+    await landingContext.onRename?.(nextName);
+    setIsEditing(false);
+  };
+
+  return (
+    <div className="hidden min-w-0 flex-1 items-center justify-center xl:flex">
+      <div className="flex min-w-0 max-w-[680px] flex-1 items-center gap-3 rounded-lg border bg-card/60 px-3 py-2 shadow-sm">
+        <Badge className="shrink-0" variant="secondary">
+          {formatTopbarLandingStatus(landingContext.status)}
+        </Badge>
+        {isEditing ? (
+          <form
+            className="flex min-w-0 flex-1 items-center gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveName();
+            }}
+          >
+            <Input
+              aria-label="Landing name"
+              autoFocus
+              className="h-8 min-w-0 flex-1 text-sm font-semibold"
+              disabled={landingContext.isRenaming}
+              value={draftName}
+              onChange={(event) => setDraftName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  setDraftName(landingContext.name);
+                  setIsEditing(false);
+                }
+              }}
+            />
+            <Button
+              aria-label="Save landing name"
+              className="h-8 w-8"
+              disabled={!draftName.trim() || landingContext.isRenaming}
+              size="icon"
+              type="submit"
+              variant="secondary"
+            >
+              <Check className="h-4 w-4" />
+            </Button>
+            <Button
+              aria-label="Cancel landing name edit"
+              className="h-8 w-8"
+              disabled={landingContext.isRenaming}
+              onClick={() => {
+                setDraftName(landingContext.name);
+                setIsEditing(false);
+              }}
+              size="icon"
+              type="button"
+              variant="ghost"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </form>
+        ) : (
+          <>
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-center gap-2">
+                <p className="truncate text-sm font-semibold text-foreground">
+                  {landingContext.name}
+                </p>
+                {landingContext.metaError ? (
+                  <span className="shrink-0 text-xs font-medium text-destructive">
+                    {landingContext.metaError}
+                  </span>
+                ) : null}
+              </div>
+              <p className="truncate text-[11px] text-muted-foreground">
+                {formatLandingContextMeta(landingContext)}
+              </p>
+            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  aria-label="Edit landing name"
+                  className="h-8 w-8 shrink-0"
+                  onClick={() => {
+                    setDraftName(landingContext.name);
+                    setIsEditing(true);
+                  }}
+                  size="icon"
+                  variant="ghost"
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Edit landing name</TooltipContent>
+            </Tooltip>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -364,6 +500,34 @@ function UserMenu() {
       </DropdownMenuContent>
     </DropdownMenu>
   );
+}
+
+function formatLandingContextMeta(context: DashboardLandingTopbarContext) {
+  return [
+    context.publicId ? `ID ${context.publicId}` : null,
+    context.geoName,
+    context.templateName,
+    context.updatedAt ? `Updated ${formatTopbarDate(context.updatedAt)}` : null
+  ]
+    .filter(Boolean)
+    .join(" / ");
+}
+
+function formatTopbarLandingStatus(status: string) {
+  return status
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatTopbarDate(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "short"
+  }).format(new Date(value));
 }
 
 export { DashboardShell };
