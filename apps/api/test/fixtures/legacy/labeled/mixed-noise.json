@@ -1,0 +1,11 @@
+{
+  "name": "mixed-noise",
+  "html": "<html><body><div id=\"wrapper\"><header id=\"hero-top\" class=\"headline hero-banner\"><h1>Get started with your wellness plan now</h1><p>Order now and save today</p></header><div id=\"plain-content\"><p>Regular informational paragraph without conversion intent.</p></div><div id=\"pricing-card\" data-role=\"price\"><p>Only 39 EUR today</p></div><div id=\"signup-box\"><form id=\"contact-form\"><input type=\"text\" name=\"full_name\"/><input type=\"email\" name=\"email\"/><input type=\"tel\" name=\"phone\"/><button>Submit</button></form></div><section id=\"social-proof\" class=\"customer-review\"><h3>What people say</h3><p>\"Best purchase ever\"</p><p>5/5 stars</p></section><div id=\"lucky-draw\" class=\"spinner roulette\">Try your luck: spin and win prize</div></div></body></html>",
+  "expected": [
+    { "id": "hero-top", "kind": "hero" },
+    { "id": "pricing-card", "kind": "price" },
+    { "id": "signup-box", "kind": "form" },
+    { "id": "social-proof", "kind": "testimonials" },
+    { "id": "lucky-draw", "kind": "wheel" }
+  ]
+}

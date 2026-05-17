@@ -1,0 +1,11 @@
+{
+  "name": "basic-blocks",
+  "html": "<html><body><section id=\"hero-main\" class=\"hero\"><h1>Order now and feel better today!</h1><p>Limited offer for new customers</p><button>Buy now</button></section><section id=\"offer-price\" class=\"price-box\"><span class=\"old-price\">99 USD</span><span class=\"new-price\">49 USD</span></section><section id=\"lead-form\" class=\"lead-form\"><form><input name=\"name\"/><input name=\"phone\"/><button type=\"submit\">Submit</button></form></section><section id=\"reviews\" class=\"testimonials\"><h2>Testimonials</h2><blockquote>\"Great result\"</blockquote><p>★★★★★</p></section><section id=\"spin-wheel\" class=\"wheel-of-fortune\">Spin the wheel and claim bonus discount 30%</section></body></html>",
+  "expected": [
+    { "id": "hero-main", "kind": "hero" },
+    { "id": "offer-price", "kind": "price" },
+    { "id": "lead-form", "kind": "form" },
+    { "id": "reviews", "kind": "testimonials" },
+    { "id": "spin-wheel", "kind": "wheel" }
+  ]
+}
