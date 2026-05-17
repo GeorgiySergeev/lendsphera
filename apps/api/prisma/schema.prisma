@@ -216,6 +216,7 @@ model Landing {
   origin           LandingOrigin  @default(NATIVE)
   legacyRef        String?
   needsReview      Boolean        @default(false)
+  placeholderManifest Json?
 
   @@unique([geoId, slug])
   @@unique([legacyRef])

@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: landing_builder
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d landing_builder"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7
+    ports:
+      - "56379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  legacy-php:
+    build:
+      context: .
+      dockerfile: tools/legacy-bridge-php/deploy/Dockerfile.legacy
+    environment:
+      LS_API_URL: http://host.docker.internal:54000/api
+      LS_BRIDGE_KEY: dev-ls-bridge-key-change-me
+      LS_BRIDGE_HMAC_SECRET: dev-ls-bridge-hmac-secret-change-me
+    volumes:
+      - ./tests/e2e/fixtures/legacy-de-urology:/var/www/html:ro
+
+  legacy-nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "58080:80"
+    volumes:
+      - ./tests/e2e/fixtures/legacy-de-urology/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./tests/e2e/fixtures/legacy-de-urology/ls-landing-map.conf:/etc/nginx/conf.d/ls-landing-map.conf:ro
+      - ./tests/e2e/fixtures/legacy-de-urology:/var/www/html:ro
+    environment:
+      LS_API_URL: http://host.docker.internal:54000/api
+      LS_BRIDGE_KEY: dev-ls-bridge-key-change-me
+    depends_on:
+      - legacy-php

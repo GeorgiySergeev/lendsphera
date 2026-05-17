@@ -19,7 +19,10 @@ function createService(overrides?: Partial<Record<string, unknown>>) {
   };
 
   return {
-    service: new PricingService(prisma as never),
+    service: new PricingService(
+      prisma as never,
+      { publish: vi.fn().mockResolvedValue(undefined) } as never
+    ),
     prisma
   };
 }

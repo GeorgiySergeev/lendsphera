@@ -9,6 +9,7 @@ import { AuthModule } from "./auth/auth.module";
 import { CategoriesModule } from "./categories/categories.module";
 import { ComponentsModule } from "./components/components.module";
 import { DownloadModule } from "./download/download.module";
+import { EventBusModule } from "./events/event-bus.module";
 import { GeosModule } from "./geos/geos.module";
 import { HealthController } from "./health/health.controller";
 import { LandingsModule } from "./landings/landings.module";
@@ -24,6 +25,7 @@ import { BullModule } from "@nestjs/bullmq";
 import { env } from "./config/env";
 import { PublishModule } from "./publish/publish.module";
 import { WidgetsModule } from "./widgets/widgets.module";
+import { WebhooksModule } from "./webhooks/webhooks.module";
 import { CustomThrottlerGuard } from "./common/custom-throttler.guard";
 import { AuditInterceptor } from "./audit/audit.interceptor";
 import { ProductsModule } from "./products/products.module";
@@ -73,7 +75,9 @@ import { PricingModule } from "./pricing/pricing.module";
     ProductsModule,
     PricingModule,
     LegacyModule,
-    PublishModule
+    PublishModule,
+    EventBusModule,
+    WebhooksModule
   ],
   controllers: [HealthController],
   providers: [

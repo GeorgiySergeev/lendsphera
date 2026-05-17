@@ -29,10 +29,10 @@
 
 | Готово | ID  | Название                           | Промпт                                                                               | PR / заметки |
 | ------ | --- | ---------------------------------- | ------------------------------------------------------------------------------------ | ------------ |
-| [ ]    | 2.1 | runtime-vars endpoint              | [2.1-runtime-vars-endpoint.md](./phase-2-legacy-bridge/2.1-runtime-vars-endpoint.md) |              |
-| [ ]    | 2.2 | PHP bridge package                 | [2.2-php-bridge-package.md](./phase-2-legacy-bridge/2.2-php-bridge-package.md)       |              |
-| [ ]    | 2.3 | Placeholder migration script       | [2.3-placeholder-migration.md](./phase-2-legacy-bridge/2.3-placeholder-migration.md) |              |
-| [ ]    | 2.4 | nginx auto_prepend integration     | [2.4-nginx-auto-prepend.md](./phase-2-legacy-bridge/2.4-nginx-auto-prepend.md)       |              |
+| [x ]   | 2.1 | runtime-vars endpoint              | [2.1-runtime-vars-endpoint.md](./phase-2-legacy-bridge/2.1-runtime-vars-endpoint.md) |              |
+| [ x]   | 2.2 | PHP bridge package                 | [2.2-php-bridge-package.md](./phase-2-legacy-bridge/2.2-php-bridge-package.md)       |              |
+| [x ]   | 2.3 | Placeholder migration script       | [2.3-placeholder-migration.md](./phase-2-legacy-bridge/2.3-placeholder-migration.md) |              |
+| [x ]   | 2.4 | nginx auto_prepend integration     | [2.4-nginx-auto-prepend.md](./phase-2-legacy-bridge/2.4-nginx-auto-prepend.md)       |              |
 | [ ]    | 2.5 | Cache invalidation on price change | [2.5-cache-invalidation.md](./phase-2-legacy-bridge/2.5-cache-invalidation.md)       |              |
 | [ ]    | 2.6 | E2E: CRM price → legacy page       | [2.6-e2e-price-propagation.md](./phase-2-legacy-bridge/2.6-e2e-price-propagation.md) |              |
 

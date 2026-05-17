@@ -1,0 +1,62 @@
+# ── Lendsphera Legacy Bridge — Docker Compose overlay ───────────────
+# Phase 2 · Step 4
+#
+# Usage:
+#   # 1. Generate the nginx landing-ID map (requires running DB)
+#   pnpm --filter @workspace/api exec tsx \
+#       ../../tools/legacy-bridge-php/deploy/generate-nginx-map.ts \
+#       > tools/legacy-bridge-php/deploy/ls-landing-map.conf
+#
+#   # 2. Bring up the legacy stack
+#   docker compose -f tools/legacy-bridge-php/deploy/docker-compose.legacy.yml up -d
+#
+#   # 3. Verify
+#   curl -sI http://localhost:8080/de/urology/ | grep -q '200 OK'
+#
+# The main docker-compose.yml (postgres, redis, minio) must be running
+# or this overlay must be combined with it.
+# ────────────────────────────────────────────────────────────────────
+
+services:
+  # ── Patched PHP-FPM with bridge auto-prepend ────────────────────
+  legacy-php:
+    build:
+      context: ../../..
+      dockerfile: tools/legacy-bridge-php/deploy/Dockerfile.legacy
+    container_name: lendsphera_legacy_php
+    restart: unless-stopped
+    volumes:
+      # Bind-mount a local legacy app for development.
+      # Replace with your actual legacy landing directory.
+      - ${LEGACY_DOCROOT:-./docroot}:/var/www/html:ro
+    environment:
+      - LS_API_URL=${LS_API_URL:-http://host.docker.internal:4000/api}
+      - LS_BRIDGE_KEY=${LS_BRIDGE_KEY:-dev-ls-bridge-key-change-me}
+    networks:
+      - legacy-net
+
+  # ── nginx reverse proxy with landing-ID map ─────────────────────
+  legacy-nginx:
+    image: nginx:1.27-alpine
+    container_name: lendsphera_legacy_nginx
+    restart: unless-stopped
+    ports:
+      - "${LEGACY_PORT:-8080}:80"
+    volumes:
+      # Full site config (includes the map + fastcgi bridge params)
+      - ./default.conf:/etc/nginx/conf.d/default.conf:ro
+      # Generated landing-ID map (output of generate-nginx-map.ts)
+      - ./ls-landing-map.conf:/etc/nginx/conf.d/ls-landing-map.conf:ro
+      # Same docroot as PHP-FPM for static assets
+      - ${LEGACY_DOCROOT:-./docroot}:/var/www/html:ro
+    environment:
+      - LS_API_URL=${LS_API_URL:-http://host.docker.internal:4000/api}
+      - LS_BRIDGE_KEY=${LS_BRIDGE_KEY:-dev-ls-bridge-key-change-me}
+    depends_on:
+      - legacy-php
+    networks:
+      - legacy-net
+
+networks:
+  legacy-net:
+    driver: bridge

@@ -1,13 +1,13 @@
 import { z } from "zod";
 
-export * from "./components";
-export * from "./builder";
-export * from "./widget-registry";
-export * from "./i18n";
-export * from "./landing";
-export * from "./price";
-export * from "./runtime-vars";
-export * from "./widget";
+export type * from "./components";
+export type * from "./builder";
+export type * from "./widget-registry";
+export type * from "./i18n";
+export type * from "./landing";
+export type * from "./price";
+export type * from "./runtime-vars";
+export type * from "./widget";
 
 export const WidgetSchema = z.object({
   id: z.string().min(1),

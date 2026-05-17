@@ -1,6 +1,7 @@
 import { ConflictException, Injectable } from "@nestjs/common";
 import { AuditAction, Prisma } from "@prisma/client";
 
+import { EventBusService } from "../events/event-bus.service";
 import { PrismaService } from "../prisma/prisma.service";
 
 type DecimalLike = string | number | Prisma.Decimal;
@@ -27,7 +28,10 @@ type BulkApplyInput = {
 
 @Injectable()
 export class PricingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventBus: EventBusService
+  ) {}
 
   async resolveActive(productId: string, geoCode: string | null, at?: string) {
     const atDate = at ? new Date(at) : new Date();
@@ -147,6 +151,16 @@ export class PricingService {
             validFrom: validFrom.toISOString()
           } satisfies Prisma.JsonObject
         }
+      });
+
+      await this.eventBus.publish({
+        event: "price.changed",
+        at: new Date().toISOString(),
+        productId: input.productId,
+        geoId,
+        priceId: created.id,
+        validFrom: validFrom.toISOString(),
+        userId
       });
 
       return created;
@@ -293,6 +307,16 @@ export class PricingService {
           validFrom: input.validFrom.toISOString()
         } satisfies Prisma.JsonObject
       }
+    });
+
+    await this.eventBus.publish({
+      event: "price.changed",
+      at: new Date().toISOString(),
+      productId: input.productId,
+      geoId: input.geoId,
+      priceId: created.id,
+      validFrom: input.validFrom.toISOString(),
+      userId
     });
 
     return created;
