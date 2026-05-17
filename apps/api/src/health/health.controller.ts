@@ -6,7 +6,7 @@ type HealthResponse = {
   timestamp: string;
 };
 
-@Controller("health")
+@Controller(["health", "v1/health"])
 export class HealthController {
   @Get()
   health(): HealthResponse {

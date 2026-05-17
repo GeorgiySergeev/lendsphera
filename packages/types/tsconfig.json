@@ -4,5 +4,5 @@
     "rootDir": "src",
     "types": ["vitest/globals"]
   },
-  "include": ["src/**/*.ts", "src/**/*.test.ts"]
+  "include": ["src/**/*.ts", "src/**/*.test.ts", "tsup.config.ts"]
 }

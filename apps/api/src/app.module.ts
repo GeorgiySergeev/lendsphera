@@ -1,5 +1,5 @@
 import { Module } from "@nestjs/common";
-import { APP_GUARD } from "@nestjs/core";
+import { APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { ThrottlerModule, seconds } from "@nestjs/throttler";
 
 import { AssetsModule } from "./assets/assets.module";
@@ -25,6 +25,8 @@ import { env } from "./config/env";
 import { PublishModule } from "./publish/publish.module";
 import { WidgetsModule } from "./widgets/widgets.module";
 import { CustomThrottlerGuard } from "./common/custom-throttler.guard";
+import { AuditInterceptor } from "./audit/audit.interceptor";
+import { ProductsModule } from "./products/products.module";
 
 @Module({
   imports: [
@@ -67,6 +69,7 @@ import { CustomThrottlerGuard } from "./common/custom-throttler.guard";
     VersionsModule,
     WidgetsModule,
     AssetsModule,
+    ProductsModule,
     LegacyModule,
     PublishModule
   ],
@@ -75,6 +78,10 @@ import { CustomThrottlerGuard } from "./common/custom-throttler.guard";
     {
       provide: APP_GUARD,
       useClass: CustomThrottlerGuard
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditInterceptor
     }
   ]
 })

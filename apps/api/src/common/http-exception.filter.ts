@@ -54,13 +54,23 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const devHint =
       status === HttpStatus.INTERNAL_SERVER_ERROR ? prismaDevHint(exception) : undefined;
 
-    response.status(status).json({
-      statusCode: status,
-      error: typeof payload === "string" ? payload : undefined,
-      message:
-        typeof payload === "object" && payload !== null && "message" in payload
-          ? payload.message
-          : payload,
+    const detail =
+      typeof payload === "object" && payload !== null && "message" in payload
+        ? payload.message
+        : payload;
+
+    const title =
+      exception instanceof HttpException
+        ? exception.name.replace(/Exception$/, "") || "HTTP Error"
+        : "Internal Server Error";
+
+    response.status(status);
+    response.type("application/problem+json");
+    response.json({
+      type: "about:blank",
+      title,
+      status,
+      detail,
       ...(devHint !== undefined ? { details: devHint } : {})
     });
   }

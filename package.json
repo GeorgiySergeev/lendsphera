@@ -17,6 +17,10 @@
     "test:e2e:debug": "playwright test --debug",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "openapi:export": "pnpm --filter @workspace/api exec tsx scripts/export-openapi.ts",
+    "openapi:generate": "pnpm --filter @workspace/api-client generate",
+    "openapi:sync": "pnpm openapi:export && pnpm openapi:generate",
+    "openapi:check": "pnpm openapi:export && git diff --exit-code openapi/openapi.json",
     "prepare": "husky"
   },
   "lint-staged": {
