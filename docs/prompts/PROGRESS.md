@@ -40,12 +40,12 @@
 
 | Готово | ID  | Название                         | Промпт                                                                                             | PR / заметки |
 | ------ | --- | -------------------------------- | -------------------------------------------------------------------------------------------------- | ------------ |
-| [ ]    | 3.1 | Widget contract and core widgets | [3.1-widget-contract.md](./phase-3-widgets-runtime/3.1-widget-contract.md)                         |              |
-| [ ]    | 3.2 | Storybook + visual regression    | [3.2-storybook-visual-regression.md](./phase-3-widgets-runtime/3.2-storybook-visual-regression.md) |              |
-| [ ]    | 3.3 | LandingContextResolver (full)    | [3.3-landing-context-resolver.md](./phase-3-widgets-runtime/3.3-landing-context-resolver.md)       |              |
-| [ ]    | 3.4 | Runtime dynamic route            | [3.4-runtime-dynamic-route.md](./phase-3-widgets-runtime/3.4-runtime-dynamic-route.md)             |              |
-| [ ]    | 3.5 | ISR + on-publish revalidation    | [3.5-isr-revalidation.md](./phase-3-widgets-runtime/3.5-isr-revalidation.md)                       |              |
-| [ ]    | 3.6 | Lead form forwarding             | [3.6-lead-form-forwarding.md](./phase-3-widgets-runtime/3.6-lead-form-forwarding.md)               |              |
+| [x ]   | 3.1 | Widget contract and core widgets | [3.1-widget-contract.md](./phase-3-widgets-runtime/3.1-widget-contract.md)                         |              |
+| [x ]   | 3.2 | Storybook + visual regression    | [3.2-storybook-visual-regression.md](./phase-3-widgets-runtime/3.2-storybook-visual-regression.md) |              |
+| [x ]   | 3.3 | LandingContextResolver (full)    | [3.3-landing-context-resolver.md](./phase-3-widgets-runtime/3.3-landing-context-resolver.md)       |              |
+| [x ]   | 3.4 | Runtime dynamic route            | [3.4-runtime-dynamic-route.md](./phase-3-widgets-runtime/3.4-runtime-dynamic-route.md)             |              |
+| [x ]   | 3.5 | ISR + on-publish revalidation    | [3.5-isr-revalidation.md](./phase-3-widgets-runtime/3.5-isr-revalidation.md)                       |              |
+| [x ]   | 3.6 | Lead form forwarding             | [3.6-lead-form-forwarding.md](./phase-3-widgets-runtime/3.6-lead-form-forwarding.md)               |              |
 
 ### Phase 4 · CRM Editor & Publishing — 0 / 6
 
@@ -60,15 +60,11 @@
 
 ### Phase 5 · Legacy Importer — 0 / 5
 
-| Готово | ID  | Название                    | Промпт                                                                           | PR / заметки |
-| ------ | --- | --------------------------- | -------------------------------------------------------------------------------- | ------------ |
-| [ ]    | 5.1 | Legacy HTML parser          | [5.1-html-parser.md](./phase-5-legacy-importer/5.1-html-parser.md)               |              |
-| [ ]    | 5.2 | Block detection heuristics  | [5.2-block-detection.md](./phase-5-legacy-importer/5.2-block-detection.md)       |              |
-| [ ]    | 5.3 | LLM-assisted widget mapping | [5.3-llm-widget-mapping.md](./phase-5-legacy-importer/5.3-llm-widget-mapping.md) |              |
-| [ ]    | 5.4 | Asset uploader              | [5.4-asset-uploader.md](./phase-5-legacy-importer/5.4-asset-uploader.md)         |              |
-| [ ]    | 5.5 | Promote to NATIVE           | [5.5-promote-to-native.md](./phase-5-legacy-importer/5.5-promote-to-native.md)   |              |
-
-### Phase 6 · i18n & AI — 0 / 5
+| Готово | ID  | Название                                               | Промпт                                                                     | PR / заметки |
+| ------ | --- | ------------------------------------------------------ | -------------------------------------------------------------------------- | ------------ |
+| [ ]    | 5.1 | Legacy HTML parser                                     | [5.1-html-parser.md](./phase-5-legacy-importer/5.1-html-parser.md)         |              |
+| [ ]    | 5.2 | Block detection heuristics                             | [5.2-block-detection.md](./phase-5-legacy-importer/5.2-block-detection.md) |              |
+| [ ]    | 5.3 | LLM-assisted widget mappingPhase 6 · i18n & AI — 0 / 5 |                                                                            |              |
 
 | Готово | ID  | Название                 | Промпт                                                                               | PR / заметки |
 | ------ | --- | ------------------------ | ------------------------------------------------------------------------------------ | ------------ |

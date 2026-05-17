@@ -11,6 +11,7 @@ import tailwindcss from "tailwindcss";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 import { env } from "../config/env";
+import { EventBusService } from "../events/event-bus.service";
 import { PrismaService } from "../prisma/prisma.service";
 
 interface PublishJobData {
@@ -24,7 +25,10 @@ export class PublishProcessor extends WorkerHost {
   private readonly logger = new Logger(PublishProcessor.name);
   private readonly s3Client: S3Client;
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventBus: EventBusService
+  ) {
     super();
     this.s3Client = new S3Client({
       endpoint: env.S3_ENDPOINT,
@@ -175,6 +179,14 @@ export class PublishProcessor extends WorkerHost {
           data: { status: "PUBLISHED" }
         })
       ]);
+
+      await this.eventBus.publish({
+        event: "landing.published",
+        at: new Date().toISOString(),
+        landingId,
+        versionId,
+        source: "publish.job"
+      });
 
       log("Publish job completed successfully.");
     } catch (error) {

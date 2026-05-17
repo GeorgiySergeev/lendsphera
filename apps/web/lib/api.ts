@@ -71,6 +71,16 @@ export type LandingDetail = LandingRow & {
   } | null;
 };
 
+export type LandingEditorNode = {
+  id: string;
+  kind: string;
+  props: Record<string, unknown>;
+};
+
+export type LandingEditorContext = {
+  widgets: LandingEditorNode[];
+};
+
 export function createServerApiClient() {
   return apiClient;
 }
@@ -152,4 +162,19 @@ export async function fetchLanding(id: string) {
 export async function fetchLandingRawContext(id: string) {
   const response = await apiClient.get<unknown>(`/landings/${id}/context`);
   return response.data;
+}
+
+export async function patchLandingEditorContext(
+  id: string,
+  context: LandingEditorContext
+) {
+  const payload = { context };
+
+  try {
+    const response = await apiClient.patch<LandingDetail>(`/v1/landings/${id}`, payload);
+    return response.data;
+  } catch {
+    const fallback = await apiClient.patch<LandingDetail>(`/landings/${id}`, payload);
+    return fallback.data;
+  }
 }

@@ -20,7 +20,15 @@ export type LandingInvalidatedEvent = {
   source: "price.changed";
 };
 
-type EventEnvelope = PriceChangedEvent | LandingInvalidatedEvent;
+export type LandingPublishedEvent = {
+  event: "landing.published";
+  at: string;
+  landingId: string;
+  versionId: string;
+  source: "publish.job";
+};
+
+type EventEnvelope = PriceChangedEvent | LandingInvalidatedEvent | LandingPublishedEvent;
 
 type EventHandler<T extends EventEnvelope> = (payload: T) => Promise<void> | void;
 
