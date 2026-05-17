@@ -11,13 +11,21 @@
     "build": "turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
+    "check": "pnpm lint && pnpm typecheck",
+    "precommit": "lint-staged",
     "test": "turbo test",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:debug": "playwright test --debug",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepare": "husky"
+    "openapi:export": "pnpm --filter @workspace/api exec tsx scripts/export-openapi.ts",
+    "openapi:generate": "pnpm --filter @workspace/api-client generate",
+    "openapi:sync": "pnpm openapi:export && pnpm openapi:generate",
+    "openapi:check": "pnpm openapi:export && git diff --exit-code openapi/openapi.json",
+    "prepare": "husky",
+    "visual": "pnpm --filter @workspace/widgets visual",
+    "visual:update": "pnpm --filter @workspace/widgets visual:update"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,mjs,cjs,json,md,css,yml,yaml}": [
@@ -42,6 +50,7 @@
     "husky": "^9.1.7",
     "kill-port": "^2.0.1",
     "lint-staged": "^16.2.7",
+    "playwright-core": "1.59.1",
     "prettier": "^3.6.2",
     "turbo": "^2.6.1",
     "typescript": "^5.9.3",

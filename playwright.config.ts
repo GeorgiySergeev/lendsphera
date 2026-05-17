@@ -8,7 +8,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
-  reporter: process.env.CI ? "github" : "html",
+  reporter: process.env.CI ? "github" : "list",
 
   use: {
     baseURL,
@@ -25,17 +25,28 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
-      dependencies: ["setup"]
+      dependencies: ["setup"],
+      testIgnore: /legacy-bridge\.spec\.ts/
     },
     {
       name: "firefox",
       use: { ...devices["Desktop Firefox"] },
-      dependencies: ["setup"]
+      dependencies: ["setup"],
+      testIgnore: /legacy-bridge\.spec\.ts/
     },
     {
       name: "webkit",
       use: { ...devices["Desktop Safari"] },
-      dependencies: ["setup"]
+      dependencies: ["setup"],
+      testIgnore: /legacy-bridge\.spec\.ts/
+    },
+    {
+      name: "legacy-bridge",
+      testMatch: /legacy-bridge\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: process.env.LEGACY_BASE_URL || "http://127.0.0.1:58080"
+      }
     }
   ],
 

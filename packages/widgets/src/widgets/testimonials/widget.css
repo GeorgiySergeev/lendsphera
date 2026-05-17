@@ -1,0 +1,14 @@
+.lsw-testimonials {
+  background: #f1f5f9;
+  padding: 20px;
+  border-radius: 12px;
+}
+.lsw-testimonials blockquote {
+  margin: 0 0 12px;
+  padding: 12px;
+  background: #fff;
+  border-radius: 10px;
+}
+.lsw-testimonials footer {
+  font-weight: 600;
+}

@@ -13,19 +13,15 @@ import { SettingsPanel } from "./SettingsPanel";
 import { ExportModal } from "./ExportModal";
 import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
 
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@workspace/ui";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@workspace/ui";
 import { Button } from "@workspace/ui";
-import { 
-  ArrowLeft, 
-  Settings, 
-  Laptop, 
-  Smartphone, 
-  Tablet, 
-  Moon, 
+import {
+  ArrowLeft,
+  Settings,
+  Laptop,
+  Smartphone,
+  Tablet,
+  Moon,
   Sun,
   MoreHorizontal,
   SplitSquareHorizontal,
@@ -44,23 +40,23 @@ import {
 export function ComponentEditorClient({ componentId }: { componentId: string }) {
   const router = useRouter();
   const { data: component, isLoading, error } = useComponent(componentId);
-  
-  const init = useComponentEditorStore(state => state.init);
-  const isDirty = useComponentEditorStore(state => state.isDirty);
-  const isSaving = useComponentEditorStore(state => state.isSaving);
-  const lastSavedAt = useComponentEditorStore(state => state.lastSavedAt);
-  const splitDirection = useComponentEditorStore(state => state.splitDirection);
-  const toggleSplitDirection = useComponentEditorStore(state => state.toggleSplitDirection);
-  const previewDevice = useComponentEditorStore(state => state.previewDevice);
-  const setPreviewDevice = useComponentEditorStore(state => state.setPreviewDevice);
-  const showSettings = useComponentEditorStore(state => state.showSettings);
-  const setShowSettings = useComponentEditorStore(state => state.setShowSettings);
-  const previewDark = useComponentEditorStore(state => state.previewDark);
-  const updateMetadata = useComponentEditorStore(state => state.updateMetadata);
-  const activeVariantId = useComponentEditorStore(state => state.activeVariantId);
-  const variants = useComponentEditorStore(state => state.variants);
-  const markSaved = useComponentEditorStore(state => state.markSaved);
-  
+
+  const init = useComponentEditorStore((state) => state.init);
+  const isDirty = useComponentEditorStore((state) => state.isDirty);
+  const isSaving = useComponentEditorStore((state) => state.isSaving);
+  const lastSavedAt = useComponentEditorStore((state) => state.lastSavedAt);
+  const splitDirection = useComponentEditorStore((state) => state.splitDirection);
+  const toggleSplitDirection = useComponentEditorStore(
+    (state) => state.toggleSplitDirection
+  );
+  const previewDevice = useComponentEditorStore((state) => state.previewDevice);
+  const setPreviewDevice = useComponentEditorStore((state) => state.setPreviewDevice);
+  const showSettings = useComponentEditorStore((state) => state.showSettings);
+  const setShowSettings = useComponentEditorStore((state) => state.setShowSettings);
+  const previewDark = useComponentEditorStore((state) => state.previewDark);
+  const updateMetadata = useComponentEditorStore((state) => state.updateMetadata);
+  const markSaved = useComponentEditorStore((state) => state.markSaved);
+
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
 
@@ -73,32 +69,32 @@ export function ComponentEditorClient({ componentId }: { componentId: string }) 
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
       const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
-      
-      if (cmdOrCtrl && e.key === 's') {
+
+      if (cmdOrCtrl && e.key === "s") {
         e.preventDefault();
         handleSave();
-      } else if (cmdOrCtrl && e.shiftKey && e.key === 'p') {
+      } else if (cmdOrCtrl && e.shiftKey && e.key === "p") {
         e.preventDefault();
         toggleSplitDirection();
-      } else if (cmdOrCtrl && e.shiftKey && e.key === 'd') {
+      } else if (cmdOrCtrl && e.shiftKey && e.key === "d") {
         e.preventDefault();
         updateMetadata({ previewDark: !useComponentEditorStore.getState().previewDark });
-      } else if (cmdOrCtrl && e.shiftKey && e.key === '1') {
+      } else if (cmdOrCtrl && e.shiftKey && e.key === "1") {
         e.preventDefault();
-        setPreviewDevice('mobile');
-      } else if (cmdOrCtrl && e.shiftKey && e.key === '2') {
+        setPreviewDevice("mobile");
+      } else if (cmdOrCtrl && e.shiftKey && e.key === "2") {
         e.preventDefault();
-        setPreviewDevice('tablet');
-      } else if (cmdOrCtrl && e.shiftKey && e.key === '3') {
+        setPreviewDevice("tablet");
+      } else if (cmdOrCtrl && e.shiftKey && e.key === "3") {
         e.preventDefault();
-        setPreviewDevice('desktop');
+        setPreviewDevice("desktop");
       }
     };
-    
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   const handleSave = async () => {
@@ -108,10 +104,10 @@ export function ComponentEditorClient({ componentId }: { componentId: string }) 
     useComponentEditorStore.setState({ isSaving: true });
     try {
       // Save component metadata if it's the default variant, or both
-      const activeVariant = state.variants.find(v => v.id === state.activeVariantId);
+      const activeVariant = state.variants.find((v) => v.id === state.activeVariantId);
       if (!activeVariant) return;
 
-      if (activeVariant.id === 'default') {
+      if (activeVariant.id === "default") {
         await componentsApi.update(componentId, {
           name: state.name,
           description: state.description,
@@ -130,52 +126,99 @@ export function ComponentEditorClient({ componentId }: { componentId: string }) 
           name: activeVariant.name
         });
       }
-      
+
       markSaved();
       toast.success("Saved");
-    } catch (e) {
+    } catch {
       toast.error("Failed to save component");
       useComponentEditorStore.setState({ isSaving: false });
     }
   };
 
-  if (isLoading) return <div className="flex h-full w-full items-center justify-center">Loading...</div>;
-  if (error || !component) return <div className="flex h-full w-full items-center justify-center">Component not found</div>;
+  if (isLoading)
+    return (
+      <div className="flex h-full w-full items-center justify-center">Loading...</div>
+    );
+  if (error || !component)
+    return (
+      <div className="flex h-full w-full items-center justify-center">
+        Component not found
+      </div>
+    );
 
   return (
     <div className="flex h-full flex-col bg-background text-foreground">
       {/* Top Bar */}
       <header className="sticky top-0 z-10 flex h-12 shrink-0 items-center justify-between border-b px-4">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" className="gap-2" onClick={() => router.push('/dashboard/components')}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-2"
+            onClick={() => router.push("/dashboard/components")}
+          >
             <ArrowLeft className="h-4 w-4" />
             Components
           </Button>
           <div className="h-4 w-px bg-border" />
-          <h1 className="text-sm font-medium">{useComponentEditorStore(s => s.name)}</h1>
+          <h1 className="text-sm font-medium">
+            {useComponentEditorStore((s) => s.name)}
+          </h1>
         </div>
 
         <div className="flex items-center gap-2">
           {/* Split Toggle */}
-          <Button variant="ghost" size="icon" onClick={toggleSplitDirection} title="Toggle Split Direction (Cmd+Shift+P)">
-            {splitDirection === 'horizontal' ? <SplitSquareHorizontal className="h-4 w-4" /> : <SplitSquareVertical className="h-4 w-4" />}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleSplitDirection}
+            title="Toggle Split Direction (Cmd+Shift+P)"
+          >
+            {splitDirection === "horizontal" ? (
+              <SplitSquareHorizontal className="h-4 w-4" />
+            ) : (
+              <SplitSquareVertical className="h-4 w-4" />
+            )}
           </Button>
 
           {/* Device Toggle */}
           <div className="flex items-center rounded-md border p-0.5">
-            <Button variant="ghost" size="icon" className={`h-7 w-7 rounded-sm ${previewDevice === 'mobile' ? 'bg-muted' : ''}`} onClick={() => setPreviewDevice('mobile')} title="Mobile (Cmd+Shift+1)">
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`h-7 w-7 rounded-sm ${previewDevice === "mobile" ? "bg-muted" : ""}`}
+              onClick={() => setPreviewDevice("mobile")}
+              title="Mobile (Cmd+Shift+1)"
+            >
               <Smartphone className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" className={`h-7 w-7 rounded-sm ${previewDevice === 'tablet' ? 'bg-muted' : ''}`} onClick={() => setPreviewDevice('tablet')} title="Tablet (Cmd+Shift+2)">
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`h-7 w-7 rounded-sm ${previewDevice === "tablet" ? "bg-muted" : ""}`}
+              onClick={() => setPreviewDevice("tablet")}
+              title="Tablet (Cmd+Shift+2)"
+            >
               <Tablet className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" className={`h-7 w-7 rounded-sm ${previewDevice === 'desktop' ? 'bg-muted' : ''}`} onClick={() => setPreviewDevice('desktop')} title="Desktop (Cmd+Shift+3)">
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`h-7 w-7 rounded-sm ${previewDevice === "desktop" ? "bg-muted" : ""}`}
+              onClick={() => setPreviewDevice("desktop")}
+              title="Desktop (Cmd+Shift+3)"
+            >
               <Laptop className="h-4 w-4" />
             </Button>
           </div>
 
           {/* Theme Toggle */}
-          <Button variant="ghost" size="icon" onClick={() => updateMetadata({ previewDark: !previewDark })} title="Toggle Dark Mode (Cmd+Shift+D)">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => updateMetadata({ previewDark: !previewDark })}
+            title="Toggle Dark Mode (Cmd+Shift+D)"
+          >
             {previewDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
 
@@ -195,9 +238,13 @@ export function ComponentEditorClient({ componentId }: { componentId: string }) 
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => {}}>Duplicate component</DropdownMenuItem>
-              <DropdownMenuItem className="text-destructive">Delete component</DropdownMenuItem>
+              <DropdownMenuItem className="text-destructive">
+                Delete component
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setIsExportOpen(true)}>Export HTML</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsExportOpen(true)}>
+                Export HTML
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -207,7 +254,11 @@ export function ComponentEditorClient({ componentId }: { componentId: string }) 
           </Button>
 
           {/* Settings Toggle */}
-          <Button variant={showSettings ? "secondary" : "ghost"} size="icon" onClick={() => setShowSettings(!showSettings)}>
+          <Button
+            variant={showSettings ? "secondary" : "ghost"}
+            size="icon"
+            onClick={() => setShowSettings(!showSettings)}
+          >
             <Settings className="h-4 w-4" />
           </Button>
 
@@ -229,7 +280,7 @@ export function ComponentEditorClient({ componentId }: { componentId: string }) 
           </ResizablePanel>
           <ResizableHandle withHandle />
           <ResizablePanel defaultSize={45} minSize={20}>
-            <CodePanel onSave={handleSave} />
+            <CodePanel />
           </ResizablePanel>
         </ResizablePanelGroup>
 
@@ -242,7 +293,10 @@ export function ComponentEditorClient({ componentId }: { componentId: string }) 
       </div>
 
       <ExportModal isOpen={isExportOpen} onOpenChange={setIsExportOpen} />
-      <KeyboardShortcutsDialog isOpen={isShortcutsOpen} onOpenChange={setIsShortcutsOpen} />
+      <KeyboardShortcutsDialog
+        isOpen={isShortcutsOpen}
+        onOpenChange={setIsShortcutsOpen}
+      />
     </div>
   );
 }

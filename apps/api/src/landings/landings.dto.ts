@@ -26,9 +26,14 @@ const landingBaseSchema = z.object({
 
 export const landingListQuerySchema = paginationSchema.extend({
   geo: z.string().optional(),
+  geoCode: z.string().optional(),
+  productId: z.string().optional(),
+  origin: z.string().optional(),
   category: z.string().optional(),
   variant: z.string().optional(),
   status: z.nativeEnum(LandingStatus).optional(),
+  q: z.string().optional(),
+  search: z.string().optional(),
   includeDeleted: z.coerce.boolean().optional()
 });
 

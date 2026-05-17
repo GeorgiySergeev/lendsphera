@@ -1,0 +1,23 @@
+# ── Lendsphera Legacy Bridge — nginx config ─────────────────────────
+#
+# 1. Include the generated map file BEFORE the server block (http context):
+#
+#   include /etc/nginx/conf.d/ls-landing-map.conf;
+#
+# The map file is produced by `generate-nginx-map.ts` and looks like:
+#
+#   map $request_uri $ls_landing_id {
+#       default "";
+#       ~^/de/urology/   clxxxxxxxxxxxxxxxxxxxxxxxxx;
+#       ~^/en/cardiology/ clyyyyyyyyyyyyyyyyyyyyyyyyy;
+#   }
+#
+# 2. Inside the `location ~ \.php$` block, add these fastcgi_params
+#    AFTER the standard `include fastcgi_params;` line:
+
+# Per-request landing ID resolved from the URI map
+fastcgi_param LS_LANDING_ID  $ls_landing_id;
+
+# Static bridge config — set via environment or hardcode
+fastcgi_param LS_API_URL     $LS_API_URL;
+fastcgi_param LS_BRIDGE_KEY  $LS_BRIDGE_KEY;

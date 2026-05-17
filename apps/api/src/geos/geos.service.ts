@@ -50,6 +50,13 @@ export class GeosService {
     });
   }
 
+  getByCode(code: string) {
+    return this.prisma.geo.findUniqueOrThrow({
+      where: { code: code.toUpperCase() },
+      include: { _count: { select: { landings: true, templates: true } } }
+    });
+  }
+
   async create(dto: CreateGeoDto) {
     try {
       return await this.prisma.geo.create({

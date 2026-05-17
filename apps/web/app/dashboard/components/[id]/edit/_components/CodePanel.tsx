@@ -3,14 +3,14 @@
 import { useComponentEditorStore } from "../../../../../../stores/component-editor.store";
 import dynamic from "next/dynamic";
 import { Skeleton, Button } from "@workspace/ui";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef } from "react";
 import type { EditorProps, OnMount } from "@monaco-editor/react";
 import { toast } from "../../../../../../lib/toast";
 
 // Need to safely import js-beautify and tailwind
 let beautifyHtml: any;
 if (typeof window !== "undefined") {
-  import("js-beautify").then(m => beautifyHtml = m.html).catch(() => {});
+  import("js-beautify").then((m) => (beautifyHtml = m.html)).catch(() => {});
 }
 
 const MonacoEditor = dynamic<EditorProps>(() => import("@monaco-editor/react"), {
@@ -34,18 +34,19 @@ async function setupTailwindIntelliSense(monaco: unknown) {
   }
 }
 
-export function CodePanel({ onSave }: { onSave: () => void }) {
-  const activeVariantId = useComponentEditorStore(state => state.activeVariantId);
-  const variants = useComponentEditorStore(state => state.variants);
-  const setHtml = useComponentEditorStore(state => state.setHtml);
-  const setCss = useComponentEditorStore(state => state.setCss);
-  const editorTab = useComponentEditorStore(state => state.editorTab);
-  const setEditorTab = useComponentEditorStore(state => state.setEditorTab);
-  
+export function CodePanel() {
+  const activeVariantId = useComponentEditorStore((state) => state.activeVariantId);
+  const variants = useComponentEditorStore((state) => state.variants);
+  const setHtml = useComponentEditorStore((state) => state.setHtml);
+  const setCss = useComponentEditorStore((state) => state.setCss);
+  const editorTab = useComponentEditorStore((state) => state.editorTab);
+  const setEditorTab = useComponentEditorStore((state) => state.setEditorTab);
+
   const editorRef = useRef<any>(null);
-  
-  const activeVariant = variants.find(v => v.id === activeVariantId) || variants[0];
-  const value = editorTab === 'html' ? activeVariant?.html || "" : activeVariant?.css || "";
+
+  const activeVariant = variants.find((v) => v.id === activeVariantId) || variants[0];
+  const value =
+    editorTab === "html" ? activeVariant?.html || "" : activeVariant?.css || "";
 
   const handleMount = useCallback<OnMount>((editor, monaco) => {
     editorRef.current = editor;
@@ -54,7 +55,7 @@ export function CodePanel({ onSave }: { onSave: () => void }) {
 
   const handleChange = (val: string | undefined) => {
     if (val === undefined) return;
-    if (editorTab === 'html') {
+    if (editorTab === "html") {
       setHtml(val);
     } else {
       setCss(val);
@@ -63,16 +64,16 @@ export function CodePanel({ onSave }: { onSave: () => void }) {
 
   const handleFormat = () => {
     if (!editorRef.current) return;
-    
-    if (editorTab === 'html' && beautifyHtml) {
-      const formatted = beautifyHtml(editorRef.current.getValue(), { 
-        indent_size: 2, 
-        wrap_line_length: 100 
+
+    if (editorTab === "html" && beautifyHtml) {
+      const formatted = beautifyHtml(editorRef.current.getValue(), {
+        indent_size: 2,
+        wrap_line_length: 100
       });
       editorRef.current.setValue(formatted);
       setHtml(formatted);
     } else {
-      editorRef.current.getAction('editor.action.formatDocument')?.run();
+      editorRef.current.getAction("editor.action.formatDocument")?.run();
     }
   };
 
@@ -92,30 +93,51 @@ export function CodePanel({ onSave }: { onSave: () => void }) {
     <div className="flex h-full w-full flex-col bg-background">
       <div className="flex h-10 items-center justify-between border-b px-2 shrink-0">
         <div className="flex gap-1">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className={`h-7 px-3 text-xs ${editorTab === 'html' ? 'bg-muted' : ''}`}
-            onClick={() => setEditorTab('html')}
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`h-7 px-3 text-xs ${editorTab === "html" ? "bg-muted" : ""}`}
+            onClick={() => setEditorTab("html")}
           >
             HTML
           </Button>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className={`h-7 px-3 text-xs ${editorTab === 'css' ? 'bg-muted' : ''}`}
-            onClick={() => setEditorTab('css')}
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`h-7 px-3 text-xs ${editorTab === "css" ? "bg-muted" : ""}`}
+            onClick={() => setEditorTab("css")}
           >
             CSS
           </Button>
         </div>
         <div className="flex gap-1">
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={handleFormat}>Format</Button>
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={handleCopy}>Copy</Button>
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={handleCopyAll}>Copy All</Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={handleFormat}
+          >
+            Format
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={handleCopy}
+          >
+            Copy
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={handleCopyAll}
+          >
+            Copy All
+          </Button>
         </div>
       </div>
-      
+
       <div className="flex-1 min-h-0 relative">
         <MonacoEditor
           language={editorTab}
@@ -126,7 +148,7 @@ export function CodePanel({ onSave }: { onSave: () => void }) {
           onMount={handleMount}
           options={{
             fontSize: 13,
-            wordWrap: 'on',
+            wordWrap: "on",
             formatOnPaste: true,
             formatOnType: false,
             minimap: { enabled: false }

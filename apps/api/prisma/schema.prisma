@@ -213,8 +213,13 @@ model Landing {
   versions         Version[]      @relation("AllVersions")
   product          Product?       @relation(fields: [productId], references: [id])
   productId        String?
+  origin           LandingOrigin  @default(NATIVE)
+  legacyRef        String?
+  needsReview      Boolean        @default(false)
+  placeholderManifest Json?
 
   @@unique([geoId, slug])
+  @@unique([legacyRef])
   @@index([status, deletedAt])
   @@index([geoId, categoryId, variantId])
   @@index([ownerId])
@@ -583,6 +588,11 @@ enum LandingStatus {
   IN_REVIEW
   PUBLISHED
   ARCHIVED
+}
+
+enum LandingOrigin {
+  NATIVE
+  WRAPPED_LEGACY
 }
 
 enum VersionStatus {

@@ -79,6 +79,11 @@ export const importLinkSchema = z.object({
   landingId: z.string().min(1)
 });
 
+export const legacyScanSchema = z.object({
+  root: z.string().min(1).optional(),
+  workspace: z.string().min(1).default("default")
+});
+
 export class LegacyListQueryDto extends createZodDto(legacyListQuerySchema) {}
 export class LegacyFilesQueryDto extends createZodDto(legacyFilesQuerySchema) {}
 export class CreateLegacyDto extends createZodDto(legacyBaseSchema) {}
@@ -90,3 +95,4 @@ export class LegacyGitConnectDto extends createZodDto(legacyGitConnectSchema) {}
 export class LegacyAssetQueryDto extends createZodDto(legacyAssetQuerySchema) {}
 export class LegacyImportAsLandingDto extends createZodDto(legacyImportAsLandingSchema) {}
 export class ImportLinkDto extends createZodDto(importLinkSchema) {}
+export class LegacyScanDto extends createZodDto(legacyScanSchema) {}

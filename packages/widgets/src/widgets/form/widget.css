@@ -1,0 +1,17 @@
+.lsw-form {
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+}
+.lsw-form form {
+  display: grid;
+  gap: 10px;
+}
+.lsw-form input {
+  width: 100%;
+  padding: 8px;
+}
+.lsw-form button {
+  width: fit-content;
+  padding: 8px 12px;
+}

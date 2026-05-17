@@ -1,0 +1,15 @@
+.lsw-price {
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 20px;
+}
+.lsw-price__main {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0;
+}
+.lsw-price__old {
+  text-decoration: line-through;
+  opacity: 0.6;
+  margin: 0 0 10px;
+}

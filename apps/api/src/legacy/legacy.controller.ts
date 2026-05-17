@@ -32,9 +32,11 @@ import {
   LegacyGitConnectDto,
   LegacyImportAsLandingDto,
   LegacyListQueryDto,
+  LegacyScanDto,
   LegacyUploadQueryDto,
   UpdateLegacyDto
 } from "./legacy.dto";
+import { LegacyScanService } from "./legacy-scan.service";
 import { LegacyService } from "./legacy.service";
 
 @ApiTags("Legacy")
@@ -42,7 +44,29 @@ import { LegacyService } from "./legacy.service";
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller("legacy")
 export class LegacyController {
-  constructor(private readonly legacy: LegacyService) {}
+  constructor(
+    private readonly legacy: LegacyService,
+    private readonly legacyScan: LegacyScanService
+  ) {}
+
+  @Roles(...ADMIN_ROLES)
+  @Post("scan")
+  async scan(@Body() dto: LegacyScanDto) {
+    const root = dto.root ?? "../landing-legacy-2";
+    const candidates = await this.legacyScan.scan(root);
+    const needsReview = candidates.filter((item) => !item.productHint).length;
+
+    return {
+      dryRun: true,
+      workspace: dto.workspace,
+      root,
+      summary: {
+        scanned: candidates.length,
+        needsReview
+      },
+      candidates
+    };
+  }
 
   @Roles(...READ_ROLES)
   @Get()

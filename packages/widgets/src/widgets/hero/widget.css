@@ -1,0 +1,23 @@
+.lsw-hero {
+  padding: 24px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #0f172a, #1e293b);
+  color: #fff;
+}
+.lsw-hero__subtitle {
+  opacity: 0.8;
+  margin: 0 0 8px;
+}
+.lsw-hero__title {
+  margin: 0 0 12px;
+  font-size: 2rem;
+}
+.lsw-hero__cta {
+  display: inline-block;
+  background: #22c55e;
+  color: #052e16;
+  padding: 10px 14px;
+  border-radius: 10px;
+  text-decoration: none;
+  font-weight: 700;
+}

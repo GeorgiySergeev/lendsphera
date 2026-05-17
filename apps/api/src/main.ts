@@ -7,6 +7,7 @@ import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import cookieParser from "cookie-parser";
+import type { Application } from "express";
 import { cleanupOpenApiDoc, ZodValidationPipe } from "nestjs-zod";
 
 import { AppModule } from "./app.module";
@@ -86,13 +87,20 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter(), new ThrottleExceptionFilter());
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle("Landing Builder API")
+    .setTitle("Lendsphera API")
     .setDescription("REST API for landing builder resources")
-    .setVersion("0.1.0")
+    .setVersion("1.0")
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup("docs", app, cleanupOpenApiDoc(document));
+  const cleanedDocument = cleanupOpenApiDoc(document);
+  SwaggerModule.setup("docs", app, cleanedDocument);
+  SwaggerModule.setup("v1/docs", app, cleanedDocument);
+
+  const expressApp = app.getHttpAdapter().getInstance() as Application;
+  expressApp.get("/v1/openapi.json", (_req, res) => {
+    res.json(cleanedDocument);
+  });
 
   try {
     await app.listen(env.PORT);

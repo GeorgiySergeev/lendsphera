@@ -3,7 +3,17 @@ import type { LandingDocument, Widget } from "@workspace/types";
 import { CountdownTimer, countdownTimerSchema } from "./countdown-timer";
 import { ExitIntentPopup, exitIntentPopupSchema } from "./exit-intent-popup";
 import { FortuneWheel, fortuneWheelSchema } from "./fortune-wheel";
-import {
+
+export * from "./contract";
+export * from "./registry";
+
+export { heroWidget } from "./widgets/hero";
+export { formWidget } from "./widgets/form";
+export { priceBlockWidget } from "./widgets/price-block";
+export { wheelWidget } from "./widgets/wheel";
+export { testimonialsWidget } from "./widgets/testimonials";
+
+export {
   buildDefaultProps,
   createWidgetEventEmitter,
   parseWidgetProps,
@@ -14,25 +24,27 @@ import {
   type WidgetSchemaField
 } from "./sdk";
 
-type WidgetRenderResult = {
+export { countdownTimerSchema, exitIntentPopupSchema, fortuneWheelSchema };
+
+export const widgetSchemas = {
+  "countdown-timer": countdownTimerSchema,
+  "exit-intent-popup": exitIntentPopupSchema,
+  "fortune-wheel": fortuneWheelSchema
+};
+
+export type WidgetRenderResult = {
   id: string;
   type: Widget["type"];
   html: string;
 };
 
-const widgetRegistry = {
+export const widgetRegistry = {
   "countdown-timer": CountdownTimer,
   "exit-intent-popup": ExitIntentPopup,
   "fortune-wheel": FortuneWheel
-} satisfies Record<string, LandingWidget>;
+};
 
-const widgetSchemas = {
-  "countdown-timer": countdownTimerSchema,
-  "exit-intent-popup": exitIntentPopupSchema,
-  "fortune-wheel": fortuneWheelSchema
-} satisfies Record<string, WidgetSchema>;
-
-function createWidgetSdk(document: LandingDocument) {
+export function createWidgetSdk(document: LandingDocument) {
   return {
     getWidget(id: string) {
       return document.widgets.find((widget) => widget.id === id) ?? null;
@@ -41,22 +53,6 @@ function createWidgetSdk(document: LandingDocument) {
       return [...document.widgets].sort((a, b) => a.order - b.order);
     }
   };
-}
-
-function renderWidget(widget: Widget): WidgetRenderResult {
-  const heading =
-    typeof widget.props.heading === "string" ? widget.props.heading : widget.type;
-  const body = typeof widget.props.body === "string" ? widget.props.body : "";
-
-  return {
-    id: widget.id,
-    type: widget.type,
-    html: `<section data-widget-id="${escapeHtml(widget.id)}" data-widget-type="${widget.type}"><h2>${escapeHtml(heading)}</h2><p>${escapeHtml(body)}</p></section>`
-  };
-}
-
-function getWidgetSchema(slug: string) {
-  return widgetSchemas[slug as keyof typeof widgetSchemas] ?? null;
 }
 
 function escapeHtml(value: string) {
@@ -68,25 +64,14 @@ function escapeHtml(value: string) {
     .replaceAll("'", "&#039;");
 }
 
-export {
-  CountdownTimer,
-  ExitIntentPopup,
-  FortuneWheel,
-  buildDefaultProps,
-  countdownTimerSchema,
-  createWidgetEventEmitter,
-  createWidgetSdk,
-  exitIntentPopupSchema,
-  fortuneWheelSchema,
-  getWidgetSchema,
-  parseWidgetProps,
-  renderWidget,
-  serializeWidgetProps,
-  widgetRegistry,
-  widgetSchemas,
-  type LandingWidget,
-  type WidgetManifestItem,
-  type WidgetRenderResult,
-  type WidgetSchema,
-  type WidgetSchemaField
-};
+export function renderWidget(widget: Widget): WidgetRenderResult {
+  const heading =
+    typeof widget.props.heading === "string" ? widget.props.heading : widget.type;
+  const body = typeof widget.props.body === "string" ? widget.props.body : "";
+
+  return {
+    id: widget.id,
+    type: widget.type,
+    html: `<section data-widget-id="${escapeHtml(widget.id)}" data-widget-type="${widget.type}"><h2>${escapeHtml(heading)}</h2><p>${escapeHtml(body)}</p></section>`
+  };
+}

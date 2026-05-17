@@ -14,6 +14,9 @@ Claude Code / Copilot Workspace **one at a time**. Prompts follow the format
 defined in `_conventions.md`. Do **not** skip Phase 0 — every later phase
 depends on its types and schema.
 
+Track completion in **[PROGRESS.md](./PROGRESS.md)** — check off each step and
+link the PR in the notes column.
+
 ## Phases
 
 | Phase | Theme                     | Steps | Exit criterion                                                                      |

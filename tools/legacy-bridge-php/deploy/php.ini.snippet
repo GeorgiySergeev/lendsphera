@@ -1,0 +1,10 @@
+; ── Lendsphera Legacy Bridge ─────────────────────────────────────────
+; Injected by deploy recipe (Phase 2 · Step 4)
+;
+; Prepends the bridge entry-point to every PHP request so that
+; runtime vars (prices, product names, CTA, etc.) are resolved and
+; injected into the output buffer transparently.
+;
+; The bridge reads LS_LANDING_ID / LS_API_URL / LS_BRIDGE_KEY from
+; config.php (which reads $_SERVER populated by fastcgi_param).
+auto_prepend_file = /opt/lendsphera/bridge/src/lendsphera-bridge.php

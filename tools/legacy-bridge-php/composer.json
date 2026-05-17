@@ -1,0 +1,22 @@
+{
+  "name": "lendsphera/legacy-bridge-php",
+  "description": "Self-contained PHP bridge for legacy landing placeholders",
+  "type": "library",
+  "require": {
+    "php": ">=8.1",
+    "ext-curl": "*"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^10.5"
+  },
+  "autoload": {
+    "psr-4": {
+      "Lendsphera\\LegacyBridge\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Lendsphera\\LegacyBridge\\Tests\\": "tests/"
+    }
+  }
+}

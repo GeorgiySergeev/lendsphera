@@ -1,0 +1,43 @@
+# ── Lendsphera Legacy Bridge — Patched PHP-FPM image ────────────────
+# Phase 2 · Step 4
+#
+# Layers on top of an official PHP-FPM image:
+#   1. Installs curl + APCu extensions (required by the bridge)
+#   2. Copies the bridge source to /opt/lendsphera/bridge/
+#   3. Drops in a Docker-aware config.php that reads $_SERVER
+#   4. Appends the auto_prepend_file directive to PHP-FPM ini
+#
+# Build context: repository root (so COPY paths are relative to it).
+# ────────────────────────────────────────────────────────────────────
+
+FROM php:8.2-fpm AS legacy-php
+
+# ── System deps + PHP extensions ────────────────────────────────────
+RUN apt-get update -qq \
+    && apt-get install -y --no-install-recommends \
+       libcurl4-openssl-dev \
+    && pecl install apcu \
+    && docker-php-ext-enable apcu \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Bridge source ──────────────────────────────────────────────────
+COPY tools/legacy-bridge-php/src/  /opt/lendsphera/bridge/src/
+
+# Docker-aware config that reads $_SERVER for fastcgi_param values
+COPY tools/legacy-bridge-php/deploy/config.docker.php \
+     /opt/lendsphera/bridge/config.php
+
+# ── PHP ini — auto_prepend ─────────────────────────────────────────
+COPY tools/legacy-bridge-php/deploy/php.ini.snippet \
+     /usr/local/etc/php/conf.d/zz-lendsphera-bridge.ini
+
+# ── Cache directory (writable by www-data) ─────────────────────────
+RUN mkdir -p /tmp/ls-cache \
+    && chown www-data:www-data /tmp/ls-cache
+
+# ── Legacy app files ───────────────────────────────────────────────
+# In production, mount or COPY the legacy PHP app here.
+# For local dev, docker-compose.legacy.yml bind-mounts it.
+WORKDIR /var/www/html
+
+EXPOSE 9000
