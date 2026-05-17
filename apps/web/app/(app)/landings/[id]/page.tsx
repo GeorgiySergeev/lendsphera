@@ -31,6 +31,12 @@ export default function LandingDetailPage() {
       >
         View versions
       </Link>
+      <Link
+        className="ml-4 text-sm underline-offset-2 hover:underline"
+        href={`/landings/${id}/promote`}
+      >
+        Promote to native
+      </Link>
       <div className="grid gap-2 rounded-md border bg-card p-4 text-sm md:grid-cols-2">
         <p>
           <span className="font-medium">Public ID:</span>{" "}

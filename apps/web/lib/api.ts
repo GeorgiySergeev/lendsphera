@@ -231,3 +231,18 @@ export async function patchLandingEditorContext(
     return fallback.data;
   }
 }
+
+export type PromoteResult = {
+  idempotent: boolean;
+  wrappedLandingId: string;
+  nativeDraftLandingId: string;
+  detectedBlocks: number;
+  uploadedAssets: number;
+};
+
+export async function promoteLegacyLanding(id: string) {
+  const response = await apiClient.post<PromoteResult>(
+    `/v1/legacy/landings/${id}/promote`
+  );
+  return response.data;
+}

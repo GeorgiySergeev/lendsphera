@@ -1,6 +1,13 @@
 import { InjectQueue } from "@nestjs/bullmq";
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, PublishJobStatus, PublishTarget, VersionStatus } from "@prisma/client";
+import {
+  AuditAction,
+  LandingOrigin,
+  Prisma,
+  PublishJobStatus,
+  PublishTarget,
+  VersionStatus
+} from "@prisma/client";
 import { Queue } from "bullmq";
 import { minify } from "html-minifier-terser";
 import { transform } from "lightningcss";
@@ -79,6 +86,8 @@ export class PublishService {
           where: { id: landingId },
           data: { currentVersionId: publishVersion.id }
         });
+
+        await this.unwireLegacyBridgeOnPromotePublish(tx, landingId, user.id);
 
         const job = await tx.publishJob.create({
           data: {
@@ -173,5 +182,106 @@ export class PublishService {
     } catch (error) {
       throw new BadRequestException("Build preview failed: " + (error as Error).message);
     }
+  }
+
+  private async unwireLegacyBridgeOnPromotePublish(
+    tx: Prisma.TransactionClient,
+    publishedLandingId: string,
+    userId: string
+  ) {
+    const promoted = await tx.landing.findUnique({
+      where: { id: publishedLandingId },
+      select: { id: true, settings: true }
+    });
+    const promotion = this.readPromotionSettings(promoted?.settings);
+    if (!promotion?.wrappedLandingId) {
+      return;
+    }
+
+    const wrapped = await tx.landing.findUnique({
+      where: { id: promotion.wrappedLandingId },
+      select: { id: true, origin: true, legacyRef: true }
+    });
+    if (!wrapped || wrapped.origin !== LandingOrigin.WRAPPED_LEGACY) {
+      return;
+    }
+
+    await tx.landing.update({
+      where: { id: wrapped.id },
+      data: {
+        origin: LandingOrigin.NATIVE,
+        legacyRef: null
+      }
+    });
+    await tx.auditLog.create({
+      data: {
+        action: AuditAction.UPDATE,
+        entity: "Landing",
+        entityId: wrapped.id,
+        userId,
+        diff: {
+          reason: "legacy-promote-publish",
+          old: { origin: "WRAPPED_LEGACY", legacyRef: wrapped.legacyRef },
+          next: { origin: "NATIVE", legacyRef: null }
+        } as Prisma.InputJsonValue
+      }
+    });
+
+    const activeLegacyRoutes = await tx.landing.findMany({
+      where: {
+        origin: LandingOrigin.WRAPPED_LEGACY,
+        legacyRef: { not: null },
+        deletedAt: null
+      },
+      select: { id: true, legacyRef: true, slug: true, geoId: true }
+    });
+    await tx.appSetting.upsert({
+      where: { key: "legacy.nginx.map" },
+      create: {
+        key: "legacy.nginx.map",
+        value: {
+          generatedAt: new Date().toISOString(),
+          entries: activeLegacyRoutes.map((item) => ({
+            landingId: item.id,
+            legacyRef: item.legacyRef,
+            slug: item.slug,
+            geoId: item.geoId
+          }))
+        } as Prisma.InputJsonValue
+      },
+      update: {
+        value: {
+          generatedAt: new Date().toISOString(),
+          entries: activeLegacyRoutes.map((item) => ({
+            landingId: item.id,
+            legacyRef: item.legacyRef,
+            slug: item.slug,
+            geoId: item.geoId
+          }))
+        } as Prisma.InputJsonValue
+      }
+    });
+  }
+
+  private readPromotionSettings(settings: unknown): {
+    wrappedLandingId?: string;
+  } | null {
+    if (!settings || typeof settings !== "object") {
+      return null;
+    }
+    const root = settings as Record<string, unknown>;
+    const promotion =
+      root.legacyPromotion && typeof root.legacyPromotion === "object"
+        ? (root.legacyPromotion as Record<string, unknown>)
+        : null;
+    if (!promotion) {
+      return null;
+    }
+    return {
+      wrappedLandingId:
+        typeof promotion.wrappedLandingId === "string"
+          ? promotion.wrappedLandingId
+          : undefined
+    };
   }
 }

@@ -39,6 +39,8 @@ model User {
   mediaFolders      MediaFolder[]
   approvalsSubmitted Approval[]            @relation("ApprovalSubmitter")
   approvalsReviewed  Approval[]            @relation("ApprovalReviewer")
+  acknowledgedComplianceIssues ComplianceIssue[] @relation("ComplianceIssueAcknowledger")
+  resolvedComplianceIssues ComplianceIssue[] @relation("ComplianceIssueResolver")
 
   @@index([role])
   @@index([isActive])
@@ -220,6 +222,7 @@ model Landing {
   needsReview      Boolean        @default(false)
   placeholderManifest Json?
   approvals        Approval[]
+  complianceIssues ComplianceIssue[]
 
   @@unique([geoId, slug])
   @@unique([legacyRef])
@@ -532,6 +535,29 @@ model AuditLog {
   @@index([createdAt])
 }
 
+model ComplianceIssue {
+  id                   String                @id @default(cuid())
+  landingId            String
+  issueKey             String
+  status               ComplianceIssueStatus @default(OPEN)
+  severity             ComplianceIssueSeverity @default(HIGH)
+  details              Json?
+  detectedAt           DateTime              @default(now())
+  acknowledgedAt       DateTime?
+  acknowledgedById     String?
+  acknowledgmentReason String?
+  resolvedAt           DateTime?
+  resolvedById         String?
+  autoFixedAt          DateTime?
+  landing              Landing               @relation(fields: [landingId], references: [id], onDelete: Cascade)
+  acknowledgedBy       User?                 @relation("ComplianceIssueAcknowledger", fields: [acknowledgedById], references: [id], onDelete: SetNull)
+  resolvedBy           User?                 @relation("ComplianceIssueResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@unique([landingId, issueKey])
+  @@index([status, detectedAt])
+  @@index([landingId, status])
+}
+
 model AppSetting {
   key       String   @id
   value     Json
@@ -659,6 +685,18 @@ enum AuditAction {
   LOGOUT
   IMPORT
   EXPORT
+}
+
+enum ComplianceIssueStatus {
+  OPEN
+  ACKNOWLEDGED
+  AUTO_FIXED
+}
+
+enum ComplianceIssueSeverity {
+  MEDIUM
+  HIGH
+  CRITICAL
 }
 
 enum PublishTarget {

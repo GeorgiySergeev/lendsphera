@@ -625,6 +625,23 @@ async function main() {
       }
     }
   });
+
+  await prisma.appSetting.upsert({
+    where: { key: "compliance_sweeper" },
+    update: {
+      value: {
+        enabled: true,
+        schedule: "0 2 * * *"
+      }
+    },
+    create: {
+      key: "compliance_sweeper",
+      value: {
+        enabled: true,
+        schedule: "0 2 * * *"
+      }
+    }
+  });
 }
 
 main()

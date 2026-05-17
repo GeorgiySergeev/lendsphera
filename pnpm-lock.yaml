@@ -76,6 +76,9 @@ importers:
       "@aws-sdk/s3-request-presigner":
         specifier: ^3.1048.0
         version: 3.1048.0
+      "@lendsphera/llm":
+        specifier: workspace:*
+        version: link:../../packages/llm
       "@nestjs/bullmq":
         specifier: ^11.0.4
         version: 11.0.4(@nestjs/common@11.1.19(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.19)(bullmq@5.76.6)
@@ -175,9 +178,6 @@ importers:
       zod:
         specifier: ^4.1.12
         version: 4.4.3
-      zod-to-json-schema:
-        specifier: ^3.24.6
-        version: 3.25.2(zod@4.4.3)
     devDependencies:
       "@nestjs/cli":
         specifier: ^11.0.14
@@ -436,6 +436,15 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  packages/llm:
+    devDependencies:
+      "@types/node":
+        specifier: ^22.10.0
+        version: 22.19.17
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.14)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.4)
 
   packages/types:
     dependencies:
@@ -11800,14 +11809,6 @@ packages:
       }
     engines: { node: ">=18" }
 
-  zod-to-json-schema@3.25.2:
-    resolution:
-      {
-        integrity: sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA==
-      }
-    peerDependencies:
-      zod: ^3.25.28 || ^4
-
   zod@4.4.3:
     resolution:
       {
@@ -19397,10 +19398,6 @@ snapshots:
   yocto-queue@0.1.0: {}
 
   yoctocolors-cjs@2.1.3: {}
-
-  zod-to-json-schema@3.25.2(zod@4.4.3):
-    dependencies:
-      zod: 4.4.3
 
   zod@4.4.3: {}
 

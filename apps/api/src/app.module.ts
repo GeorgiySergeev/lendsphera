@@ -31,6 +31,8 @@ import { AuditInterceptor } from "./audit/audit.interceptor";
 import { ProductsModule } from "./products/products.module";
 import { PricingModule } from "./pricing/pricing.module";
 import { ApprovalsModule } from "./landings/approvals.module";
+import { LegacyImporterModule } from "./legacy-importer/legacy-importer.module";
+import { ComplianceModule } from "./compliance/compliance.module";
 
 @Module({
   imports: [
@@ -77,6 +79,8 @@ import { ApprovalsModule } from "./landings/approvals.module";
     PricingModule,
     ApprovalsModule,
     LegacyModule,
+    LegacyImporterModule,
+    ComplianceModule,
     PublishModule,
     EventBusModule,
     WebhooksModule

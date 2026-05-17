@@ -12,7 +12,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "seed": "prisma db seed",
-    "test:integration": "vitest run test/integration/price-invalidation.spec.ts"
+    "test:integration": "vitest run test/integration/*.spec.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1048.0",
@@ -26,6 +26,7 @@
     "@nestjs/swagger": "^11.4.2",
     "@nestjs/throttler": "^6.5.0",
     "@prisma/client": "^6.19.0",
+    "@lendsphera/llm": "workspace:*",
     "@workspace/types": "workspace:*",
     "adm-zip": "^0.5.17",
     "bcryptjs": "^3.0.3",
