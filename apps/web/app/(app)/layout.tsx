@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AuthGuard } from "../../components/providers/auth-guard";
 
 const navItems = [
+  { href: "/dashboard", label: "Dashboard" },
   { href: "/products", label: "Products" },
   { href: "/pricing", label: "Pricing" },
   { href: "/landings", label: "Landings" }

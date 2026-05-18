@@ -67,10 +67,10 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const [isCollapsed, setIsCollapsed] = React.useState(false);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="h-dvh overflow-hidden bg-background text-foreground">
       <div
         className={cn(
-          "hidden lg:fixed lg:inset-y-0 lg:flex transition-all duration-300 z-40",
+          "hidden lg:fixed lg:inset-y-0 lg:flex lg:overflow-hidden transition-all duration-300 z-40",
           isCollapsed ? "w-16" : "w-64"
         )}
       >
@@ -81,12 +81,12 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
       </div>
       <div
         className={cn(
-          "flex min-h-screen flex-col transition-all duration-300",
+          "flex h-dvh min-h-0 flex-col transition-all duration-300",
           isCollapsed ? "lg:pl-16" : "lg:pl-64"
         )}
       >
         <DashboardTopBar onOpenMobileNav={() => setOpen(true)} />
-        <main className="flex-1 px-4 py-0 sm:px-6 lg:px-8">
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-6 sm:px-6 lg:px-8">
           <div className="w-full max-w-none">{children}</div>
         </main>
       </div>
@@ -120,7 +120,12 @@ function DashboardSidebar({
   const pathname = usePathname();
 
   return (
-    <Sidebar className={cn("transition-all duration-300", isCollapsed ? "w-16" : "w-64")}>
+    <Sidebar
+      className={cn(
+        "h-full min-h-0 transition-all duration-300",
+        isCollapsed ? "w-16" : "w-64"
+      )}
+    >
       <SidebarHeader className="flex flex-row items-center justify-between min-h-16 px-2">
         {!isCollapsed && (
           <Link
@@ -153,7 +158,7 @@ function DashboardSidebar({
         )}
       </SidebarHeader>
       <Separator className="bg-sidebar-border" />
-      <SidebarContent>
+      <SidebarContent className="min-h-0 overflow-y-auto overscroll-y-contain">
         <SidebarGroup>
           {!isCollapsed && <SidebarGroupLabel>Workspace</SidebarGroupLabel>}
           <SidebarMenu>
@@ -234,7 +239,7 @@ function DashboardSidebar({
 
 function DashboardTopBar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
   return (
-    <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
+    <header className="z-30 shrink-0 border-b bg-background/95 backdrop-blur">
       <div className="flex h-16 items-center gap-2 px-3 sm:gap-3 sm:px-6 lg:px-8">
         <Button
           type="button"

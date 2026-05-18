@@ -1,6 +1,7 @@
 import { renderWidget } from "@workspace/widgets";
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui";
 import { LandingDocumentSchema } from "@workspace/types";
+
 import { WidgetRuntimeLoader } from "../widget-runtime-loader";
 
 const demoDocument = LandingDocumentSchema.parse({
@@ -28,30 +29,23 @@ const demoDocument = LandingDocumentSchema.parse({
   ]
 });
 
-export default async function LandingPage({
-  params
-}: {
-  params: Promise<{ slug: string }>;
-}) {
-  const { slug } = await params;
-  const document = { ...demoDocument, slug };
-
+export default function RuntimeDemoPage() {
   return (
     <main className="min-h-screen bg-background">
       <WidgetRuntimeLoader />
       <section className="mx-auto flex max-w-4xl flex-col gap-6 px-5 py-10 sm:px-8">
         <div className="space-y-3">
           <p className="text-sm font-medium uppercase tracking-normal text-primary">
-            /{document.slug}
+            /demo
           </p>
-          <h1 className="text-4xl font-semibold tracking-normal">{document.title}</h1>
+          <h1 className="text-4xl font-semibold tracking-normal">{demoDocument.title}</h1>
           <p className="max-w-2xl text-base leading-7 text-muted-foreground">
-            {document.description}
+            {demoDocument.description}
           </p>
         </div>
 
         <div className="grid gap-4">
-          {document.widgets
+          {demoDocument.widgets
             .sort((a, b) => a.order - b.order)
             .map((widget) => {
               const rendered = renderWidget(widget);

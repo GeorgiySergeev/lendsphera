@@ -16,7 +16,7 @@ export default function RuntimeIndexPage() {
         slug.
       </p>
       <Button asChild className="w-fit">
-        <Link href="/demo-landing">View demo landing</Link>
+        <Link href="/demo">View demo landing</Link>
       </Button>
     </main>
   );

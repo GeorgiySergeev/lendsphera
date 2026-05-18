@@ -10,7 +10,10 @@ import {
   Settings,
   ShieldAlert,
   Tags,
-  Wrench
+  Wrench,
+  MoveUpRight,
+  House,
+  SquaresExclude
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -22,9 +25,11 @@ type DashboardNavItem = {
 };
 
 const dashboardNavItems: DashboardNavItem[] = [
+  { title: "Dashboard", href: "/dashboard", icon: House },
   { title: "Landings", href: "/dashboard/landings", icon: FileStack, badge: "18" },
   { title: "Templates", href: "/dashboard/templates", icon: LayoutTemplate, badge: "9" },
   { title: "Builder", href: "/dashboard/builder", icon: Wrench },
+  { title: "Editor", href: "/dashboard/editor", icon: SquaresExclude },
   { title: "Download", href: "/dashboard/download", icon: Download },
   { title: "Localization", href: "/dashboard/localization", icon: Languages },
   { title: "Compliance", href: "/dashboard/compliance", icon: ShieldAlert },
@@ -33,7 +38,8 @@ const dashboardNavItems: DashboardNavItem[] = [
   { title: "Repository", href: "/dashboard/repository", icon: Database },
   { title: "Media Library", href: "/dashboard/media", icon: Images },
   { title: "Taxonomy", href: "/dashboard/taxonomy", icon: Tags },
-  { title: "Settings", href: "/dashboard/settings", icon: Settings }
+  { title: "Settings", href: "/dashboard/settings", icon: Settings },
+  { title: "Legacy", href: "/landings", icon: MoveUpRight }
 ];
 
 export { dashboardNavItems };

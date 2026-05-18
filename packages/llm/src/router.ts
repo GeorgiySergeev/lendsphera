@@ -43,7 +43,7 @@ export class LlmProviderRouter implements LlmProvider {
 
     const selected = (options.provider ??
       process.env.LLM_PROVIDER ??
-      "anthropic") as LlmProviderName;
+      defaultProviderForEnvironment()) as LlmProviderName;
 
     const anthropic = options.anthropicApiKey ?? process.env.ANTHROPIC_API_KEY;
     const openai = options.openaiApiKey ?? process.env.OPENAI_API_KEY;
@@ -94,6 +94,10 @@ export class LlmProviderRouter implements LlmProvider {
       throw error;
     }
   }
+}
+
+function defaultProviderForEnvironment(): LlmProviderName {
+  return process.env.NODE_ENV === "development" ? "fixture" : "anthropic";
 }
 
 function isRetryable(error: unknown): boolean {

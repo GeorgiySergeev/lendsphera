@@ -14,12 +14,14 @@ import {
   Edit,
   Eye,
   FileClock,
+  Grid2X2,
+  List,
   MoreHorizontal,
-  Search,
+  Plus,
   Settings,
-  Trash2,
-  Wrench
+  Trash2
 } from "lucide-react";
+import type { BuilderPageSummary } from "@workspace/types";
 import Link from "next/link";
 import { parseAsInteger, parseAsString, useQueryStates } from "nuqs";
 import * as React from "react";
@@ -35,8 +37,6 @@ import {
   AlertDialogTitle,
   Badge,
   Button,
-  Card,
-  CardContent,
   Checkbox,
   Dialog,
   DialogContent,
@@ -49,10 +49,6 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  Input,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
   Select,
   SelectContent,
   SelectItem,
@@ -64,7 +60,8 @@ import {
   TableCell,
   TableHead,
   TableHeader,
-  TableRow
+  TableRow,
+  cn
 } from "@workspace/ui";
 
 import {
@@ -85,6 +82,7 @@ import {
 } from "../../lib/api/landings";
 import { useBuilderPages } from "../../hooks/use-builder";
 import { CreateLandingWizard } from "./create-landing-wizard";
+import { LandingsFiltersBar } from "./landings-filters-bar";
 
 const queryKeys = {
   categories: ["landings", "filters", "categories"] as const,
@@ -105,6 +103,9 @@ const filterParsers = {
   variant: parseAsString.withDefault("all")
 };
 
+type BuilderDraftsViewMode = "grid" | "list";
+const BUILDER_DRAFTS_VIEW_KEY = "landings-builder-drafts-view";
+
 function LandingsTablePage() {
   const queryClient = useQueryClient();
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
@@ -116,6 +117,20 @@ function LandingsTablePage() {
   const [duplicateError, setDuplicateError] = React.useState<string | null>(null);
   const [versionsTarget, setVersionsTarget] = React.useState<LandingRow | null>(null);
   const [filters, setFilters] = useQueryStates(filterParsers);
+  const [builderDraftsView, setBuilderDraftsView] =
+    React.useState<BuilderDraftsViewMode>("list");
+
+  React.useEffect(() => {
+    const saved = window.localStorage.getItem(BUILDER_DRAFTS_VIEW_KEY);
+    if (saved === "grid" || saved === "list") {
+      setBuilderDraftsView(saved);
+    }
+  }, []);
+
+  const updateBuilderDraftsView = React.useCallback((next: BuilderDraftsViewMode) => {
+    setBuilderDraftsView(next);
+    window.localStorage.setItem(BUILDER_DRAFTS_VIEW_KEY, next);
+  }, []);
 
   const apiFilters = getApiFilters(filters);
   const selectedIds = React.useMemo(() => Object.keys(rowSelection), [rowSelection]);
@@ -217,20 +232,17 @@ function LandingsTablePage() {
   const isBulkBusy = bulkDeleteMutation.isPending || bulkStatusMutation.isPending;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-            Landings
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Manage landing pages, publication state, GEO coverage, and revisions.
-          </p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Badge variant="outline" className="w-fit">
-            {landingsQuery.data?.meta.total ?? 0} records
-          </Badge>
+    <>
+      <div className="rounded-lg border bg-card overflow-hidden">
+        <div className="flex flex-col gap-4 border-b px-4 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+              Landings
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Manage landing pages, publication state, GEO coverage, and revisions.
+            </p>
+          </div>
           <CreateLandingWizard
             geos={geosQuery.data ?? []}
             geosLoading={geosQuery.isLoading}
@@ -238,178 +250,108 @@ function LandingsTablePage() {
             variantsLoading={variantsQuery.isLoading}
           />
         </div>
-      </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
-        <div className="relative min-w-0">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            aria-label="Search landings"
-            placeholder="Search by name, ID, slug, or notes"
-            value={filters.search}
-            className="pl-9"
-            onChange={(event) => updateFilters({ search: event.target.value })}
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <GeoMultiSelect
-            geos={geosQuery.data ?? []}
-            selectedCodes={selectedGeoCodes}
-            onChange={(codes) => updateFilters({ geo: codes.join(",") })}
-          />
-          <SingleFilter
-            label="Category"
-            value={filters.category}
-            options={categoriesQuery.data ?? []}
-            getValue={(item) => item.slug}
-            getLabel={(item) => item.name}
-            onChange={(value) => updateFilters({ category: value })}
-          />
-          <SingleFilter
-            label="Variant"
-            value={filters.variant}
-            options={variantsQuery.data ?? []}
-            getValue={(item) => item.slug}
-            getLabel={(item) => item.name}
-            onChange={(value) => updateFilters({ variant: value })}
-          />
-          <Select
-            value={filters.status}
-            onValueChange={(value) => updateFilters({ status: value })}
-          >
-            <SelectTrigger aria-label="Filter by status">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              {landingStatuses.map((status) => (
-                <SelectItem key={status} value={status}>
-                  {formatStatus(status)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+        <LandingsFiltersBar
+          embedded
+          search={filters.search}
+          geoCodes={selectedGeoCodes}
+          category={filters.category}
+          variant={filters.variant}
+          status={filters.status}
+          total={landingsQuery.data?.meta.total ?? 0}
+          geos={geosQuery.data ?? []}
+          categories={categoriesQuery.data ?? []}
+          variants={variantsQuery.data ?? []}
+          onSearchChange={(value) => updateFilters({ search: value })}
+          onGeoChange={(codes) => updateFilters({ geo: codes.join(",") })}
+          onCategoryChange={(value) => updateFilters({ category: value })}
+          onVariantChange={(value) => updateFilters({ variant: value })}
+          onStatusChange={(value) => updateFilters({ status: value })}
+          onClearAll={() =>
+            updateFilters({
+              search: "",
+              geo: "",
+              category: "all",
+              variant: "all",
+              status: "all"
+            })
+          }
+        />
 
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <section className="border-b">
+          <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div>
-              <div className="flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <Wrench className="h-4 w-4" aria-hidden="true" />
-                </div>
-                <div>
-                  <h2 className="text-base font-semibold">Builder drafts</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Open pages created in Builder directly from the Landings workspace.
-                  </p>
-                </div>
-              </div>
+              <h2 className="text-sm font-semibold">Builder drafts</h2>
+              <p className="text-xs text-muted-foreground">
+                Open pages created in Builder directly from the Landings workspace.
+              </p>
             </div>
-            <Button asChild variant="outline">
-              <Link href="/dashboard/builder">Open Builder</Link>
-            </Button>
+            <div className="flex shrink-0 items-center gap-2">
+              <BuilderDraftsViewToggle
+                view={builderDraftsView}
+                onViewChange={updateBuilderDraftsView}
+              />
+              <Button asChild variant="outline" size="sm">
+                <Link href="/dashboard/builder">Open Builder</Link>
+              </Button>
+            </div>
           </div>
 
-          <div className="mt-4">
-            {builderPagesQuery.isLoading ? (
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {Array.from({ length: 3 }).map((_, index) => (
-                  <Skeleton key={index} className="h-28 w-full" />
-                ))}
-              </div>
-            ) : builderPagesQuery.isError ? (
-              <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                Builder drafts could not be loaded right now.
-              </div>
-            ) : builderPagesQuery.data?.length ? (
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {builderPagesQuery.data.slice(0, 6).map((page) => (
-                  <div key={page.id} className="rounded-xl border bg-card/60 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{page.name}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Updated {formatDate(page.updatedAt)}
-                        </p>
-                      </div>
-                      <Badge variant="outline">{formatStatus(page.status)}</Badge>
-                    </div>
-                    <div className="mt-4 flex items-center gap-2">
-                      <Button asChild size="sm">
-                        <Link href={`/dashboard/builder?id=${page.id}`}>
-                          Open in Builder
-                        </Link>
-                      </Button>
-                      <Button asChild size="sm" variant="outline">
-                        <Link href="/dashboard/builder">New draft</Link>
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                No builder drafts yet. Start a page in Builder and it will appear here.
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+          <BuilderDraftsContent
+            pages={builderPagesQuery.data ?? []}
+            view={builderDraftsView}
+            isLoading={builderPagesQuery.isLoading}
+            isError={builderPagesQuery.isError}
+          />
+        </section>
 
-      {selectedIds.length ? (
-        <div className="flex flex-col gap-3 rounded-md border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm font-medium">{selectedIds.length} selected</p>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Select
-              value={bulkStatus}
-              onValueChange={(value) => setBulkStatus(value as LandingStatus)}
-            >
-              <SelectTrigger className="sm:w-44" aria-label="Bulk status">
-                <SelectValue placeholder="Change status" />
-              </SelectTrigger>
-              <SelectContent>
-                {landingStatuses.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {formatStatus(status)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              variant="outline"
-              disabled={!bulkStatus || isBulkBusy}
-              onClick={() => {
-                if (bulkStatus) {
-                  bulkStatusMutation.mutate({
-                    ids: selectedIds,
-                    status: bulkStatus
-                  });
-                }
-              }}
-            >
-              Apply status
-            </Button>
-            <Button
-              variant="outline"
-              disabled={isBulkBusy}
-              onClick={() => setBulkDeleteOpen(true)}
-            >
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-              Delete selected
-            </Button>
+        {selectedIds.length ? (
+          <div className="flex flex-col gap-3 border-b bg-muted/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <p className="text-sm font-medium">{selectedIds.length} selected</p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Select
+                value={bulkStatus}
+                onValueChange={(value) => setBulkStatus(value as LandingStatus)}
+              >
+                <SelectTrigger className="sm:w-44" aria-label="Bulk status">
+                  <SelectValue placeholder="Change status" />
+                </SelectTrigger>
+                <SelectContent>
+                  {landingStatuses.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {formatStatus(status)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                disabled={!bulkStatus || isBulkBusy}
+                onClick={() => {
+                  if (bulkStatus) {
+                    bulkStatusMutation.mutate({
+                      ids: selectedIds,
+                      status: bulkStatus
+                    });
+                  }
+                }}
+              >
+                Apply status
+              </Button>
+              <Button
+                variant="outline"
+                disabled={isBulkBusy}
+                onClick={() => setBulkDeleteOpen(true)}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                Delete selected
+              </Button>
+            </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
-      <div className="rounded-lg border bg-card overflow-hidden">
         {landingsQuery.isLoading ? (
-          <div className="space-y-3 p-4">
+          <div className="space-y-3 p-4 sm:px-6">
             {Array.from({ length: 7 }).map((_, index) => (
               <Skeleton key={index} className="h-14 w-full" />
             ))}
@@ -474,46 +416,46 @@ function LandingsTablePage() {
             </TableBody>
           </Table>
         )}
-      </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted-foreground">
-          Page {landingsQuery.data?.meta.page ?? filters.page} of{" "}
-          {landingsQuery.data?.meta.pageCount ?? 1}
-        </p>
-        <div className="flex items-center gap-2">
-          <Select
-            value={String(filters.limit)}
-            onValueChange={(value) => updateFilters({ limit: Number(value), page: 1 })}
-          >
-            <SelectTrigger className="w-28" aria-label="Rows per page">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {[10, 20, 50, 100].map((limit) => (
-                <SelectItem key={limit} value={String(limit)}>
-                  {limit} rows
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            variant="outline"
-            disabled={filters.page <= 1 || landingsQuery.isFetching}
-            onClick={() => updateFilters({ page: Math.max(1, filters.page - 1) })}
-          >
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            disabled={
-              filters.page >= (landingsQuery.data?.meta.pageCount ?? 1) ||
-              landingsQuery.isFetching
-            }
-            onClick={() => updateFilters({ page: filters.page + 1 })}
-          >
-            Next
-          </Button>
+        <div className="flex flex-col gap-3 border-t bg-muted/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <p className="text-sm text-muted-foreground">
+            Page {landingsQuery.data?.meta.page ?? filters.page} of{" "}
+            {landingsQuery.data?.meta.pageCount ?? 1}
+          </p>
+          <div className="flex items-center gap-2">
+            <Select
+              value={String(filters.limit)}
+              onValueChange={(value) => updateFilters({ limit: Number(value), page: 1 })}
+            >
+              <SelectTrigger className="w-28" aria-label="Rows per page">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[10, 20, 50, 100].map((limit) => (
+                  <SelectItem key={limit} value={String(limit)}>
+                    {limit} rows
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              disabled={filters.page <= 1 || landingsQuery.isFetching}
+              onClick={() => updateFilters({ page: Math.max(1, filters.page - 1) })}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              disabled={
+                filters.page >= (landingsQuery.data?.meta.pageCount ?? 1) ||
+                landingsQuery.isFetching
+              }
+              onClick={() => updateFilters({ page: filters.page + 1 })}
+            >
+              Next
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -600,7 +542,228 @@ function LandingsTablePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </>
+  );
+}
+
+function BuilderDraftsViewToggle({
+  view,
+  onViewChange
+}: {
+  view: BuilderDraftsViewMode;
+  onViewChange: (view: BuilderDraftsViewMode) => void;
+}) {
+  return (
+    <div
+      className="inline-flex rounded-md border bg-background p-1"
+      role="group"
+      aria-label="Builder drafts layout"
+    >
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className={cn("h-8 gap-1", view === "grid" && "bg-muted")}
+        onClick={() => onViewChange("grid")}
+        aria-pressed={view === "grid"}
+      >
+        <Grid2X2 className="h-4 w-4" aria-hidden="true" />
+        <span className="hidden sm:inline">Grid</span>
+        <span className="sr-only sm:hidden">Grid view</span>
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className={cn("h-8 gap-1", view === "list" && "bg-muted")}
+        onClick={() => onViewChange("list")}
+        aria-pressed={view === "list"}
+      >
+        <List className="h-4 w-4" aria-hidden="true" />
+        <span className="hidden sm:inline">List</span>
+        <span className="sr-only sm:hidden">List view</span>
+      </Button>
     </div>
+  );
+}
+
+const builderTableHeadClass =
+  "h-10 text-xs font-medium uppercase tracking-wider text-muted-foreground";
+
+function BuilderDraftsContent({
+  pages,
+  view,
+  isLoading,
+  isError
+}: {
+  pages: BuilderPageSummary[];
+  view: BuilderDraftsViewMode;
+  isLoading: boolean;
+  isError: boolean;
+}) {
+  const visiblePages = pages.slice(0, 6);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3 p-4 sm:px-6">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <Skeleton key={index} className="h-14 w-full" />
+        ))}
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="p-6 sm:px-6">
+        <p className="text-sm font-medium">Unable to load builder drafts</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Check the API server and try again.
+        </p>
+      </div>
+    );
+  }
+
+  if (!visiblePages.length) {
+    return (
+      <div className="p-6 sm:px-6">
+        <p className="text-sm text-muted-foreground">
+          No builder drafts yet. Start a page in Builder and it will appear here.
+        </p>
+      </div>
+    );
+  }
+
+  return view === "grid" ? (
+    <BuilderDraftsGrid pages={visiblePages} />
+  ) : (
+    <BuilderDraftsTable pages={visiblePages} />
+  );
+}
+
+function BuilderDraftsGrid({ pages }: { pages: BuilderPageSummary[] }) {
+  return (
+    <div className="grid gap-4 p-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-3">
+      {pages.map((page) => (
+        <article
+          key={page.id}
+          className="flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-sm"
+        >
+          <BuilderDraftPreviewThumb page={page} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-medium">{page.name}</p>
+            <p className="mt-1 truncate text-xs text-muted-foreground">{page.id}</p>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <BuilderDraftStatusCell status={page.status} />
+            <span className="whitespace-nowrap text-xs text-muted-foreground">
+              {formatDate(page.updatedAt)}
+            </span>
+          </div>
+          <div className="flex justify-end">
+            <BuilderDraftActions page={page} />
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function BuilderDraftsTable({ pages }: { pages: BuilderPageSummary[] }) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className={cn(builderTableHeadClass, "min-w-24")}>Preview</TableHead>
+          <TableHead className={cn(builderTableHeadClass, "min-w-60")}>
+            Name + ID
+          </TableHead>
+          <TableHead className={builderTableHeadClass}>Status</TableHead>
+          <TableHead className={builderTableHeadClass}>Updated</TableHead>
+          <TableHead className={cn(builderTableHeadClass, "w-12 text-right")} />
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {pages.map((page) => (
+          <TableRow
+            key={page.id}
+            className="border-b transition-colors hover:bg-muted/40"
+          >
+            <TableCell className="min-w-24">
+              <BuilderDraftPreviewThumb page={page} />
+            </TableCell>
+            <TableCell className="min-w-60">
+              <div className="min-w-52">
+                <p className="truncate font-medium">{page.name}</p>
+                <p className="mt-1 truncate text-xs text-muted-foreground">{page.id}</p>
+              </div>
+            </TableCell>
+            <TableCell>
+              <BuilderDraftStatusCell status={page.status} />
+            </TableCell>
+            <TableCell>
+              <span className="whitespace-nowrap text-sm text-muted-foreground">
+                {formatDate(page.updatedAt)}
+              </span>
+            </TableCell>
+            <TableCell className="w-12 text-right">
+              <BuilderDraftActions page={page} />
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+function BuilderDraftPreviewThumb({ page }: { page: BuilderPageSummary }) {
+  const label = page.name.trim().slice(0, 2).toUpperCase() || "BL";
+
+  return (
+    <div
+      aria-hidden="true"
+      className="flex h-10 w-16 items-center justify-center rounded-md border bg-muted/50 text-[10px] font-medium text-muted-foreground shadow-sm"
+    >
+      {label}
+    </div>
+  );
+}
+
+function BuilderDraftStatusCell({ status }: { status: BuilderPageSummary["status"] }) {
+  return (
+    <div className="flex items-center gap-2">
+      <div
+        className={cn("h-2 w-2 rounded-full", getStatusDotColor(status))}
+        aria-hidden="true"
+      />
+      {formatStatus(status)}
+    </div>
+  );
+}
+
+function BuilderDraftActions({ page }: { page: BuilderPageSummary }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" aria-label={`Actions for ${page.name}`}>
+          <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem asChild>
+          <Link href={`/dashboard/builder?id=${page.id}`}>
+            <Edit className="h-4 w-4" aria-hidden="true" />
+            Open in Builder
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/dashboard/builder">
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            New draft
+          </Link>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -718,96 +881,6 @@ function createColumns({
 
 function getColumnClass(column: Column<LandingRow, unknown>) {
   return (column.columnDef.meta as { className?: string } | undefined)?.className;
-}
-
-function GeoMultiSelect({
-  geos,
-  selectedCodes,
-  onChange
-}: {
-  geos: GeoOption[];
-  selectedCodes: string[];
-  onChange: (codes: string[]) => void;
-}) {
-  const toggle = (code: string) => {
-    onChange(
-      selectedCodes.includes(code)
-        ? selectedCodes.filter((item) => item !== code)
-        : [...selectedCodes, code]
-    );
-  };
-
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" className="justify-between lg:w-48">
-          {selectedCodes.length ? `${selectedCodes.length} GEO selected` : "All GEOs"}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-64">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium">GEO</p>
-            {selectedCodes.length ? (
-              <Button variant="ghost" size="sm" onClick={() => onChange([])}>
-                Clear
-              </Button>
-            ) : null}
-          </div>
-          <div className="max-h-64 space-y-1 overflow-auto pr-1">
-            {geos.map((geo) => (
-              <label
-                key={geo.id}
-                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
-              >
-                <Checkbox
-                  checked={selectedCodes.includes(geo.code)}
-                  onCheckedChange={() => toggle(geo.code)}
-                />
-                <span aria-hidden="true">{geo.flagEmoji ?? "○"}</span>
-                <span className="font-medium">{geo.code}</span>
-                <span className="truncate text-muted-foreground">{geo.name}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function SingleFilter<T>({
-  label,
-  value,
-  options,
-  getValue,
-  getLabel,
-  onChange
-}: {
-  label: string;
-  value: string;
-  options: T[];
-  getValue: (item: T) => string;
-  getLabel: (item: T) => string;
-  onChange: (value: string) => void;
-}) {
-  const pluralLabel = label === "Category" ? "categories" : `${label.toLowerCase()}s`;
-
-  return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger aria-label={`Filter by ${label.toLowerCase()}`}>
-        <SelectValue placeholder={label} />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all">All {pluralLabel}</SelectItem>
-        {options.map((option) => (
-          <SelectItem key={getValue(option)} value={getValue(option)}>
-            {getLabel(option)}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
 }
 
 function LandingActions({
@@ -1067,7 +1140,7 @@ function formatStatus(status: LandingStatus | string) {
     .join(" ");
 }
 
-function getStatusDotColor(status: LandingStatus) {
+function getStatusDotColor(status: LandingStatus | BuilderPageSummary["status"]) {
   if (status === "PUBLISHED") {
     return "bg-emerald-500";
   }
