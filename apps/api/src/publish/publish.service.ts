@@ -9,12 +9,6 @@ import {
   VersionStatus
 } from "@prisma/client";
 import { Queue } from "bullmq";
-import { minify } from "html-minifier-terser";
-import { transform } from "lightningcss";
-import postcss from "postcss";
-import type { AcceptedPlugin } from "postcss";
-// @ts-expect-error: no types available for tailwindcss
-import tailwindcss from "tailwindcss";
 
 import type { AuthUser } from "../common/current-user.decorator";
 import { mapPrismaError } from "../common/prisma-errors";
@@ -22,6 +16,7 @@ import { LandingContextResolver } from "../landings/landing-context.resolver";
 import { ApprovalsService } from "../landings/approvals.service";
 import { PolicyService } from "../policy/policy.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { renderVersionHtml } from "./render-version";
 
 @Injectable()
 export class PublishService {
@@ -132,53 +127,16 @@ export class PublishService {
       throw new NotFoundException("No current version found.");
     }
 
-    const version = landing.currentVersion;
-    let html = version.html || "";
-
     try {
-      const tailwindPlugin = tailwindcss as unknown as (
-        options: Record<string, unknown>
-      ) => AcceptedPlugin;
-      const tailwindProcessor = postcss([
-        tailwindPlugin({
-          content: [{ raw: html, extension: "html" }],
-          theme: { extend: {} },
-          corePlugins: { preflight: true }
-        })
-      ]);
-      const twResult = await tailwindProcessor.process(
-        "@tailwind base;\n@tailwind components;\n@tailwind utilities;",
-        {
-          from: undefined
-        }
-      );
-      let finalCss = twResult.css;
-
-      if (version.customCss) {
-        finalCss += "\n" + version.customCss;
-      }
-
-      const cssBuffer = Buffer.from(finalCss);
-      const minifiedCss = transform({
-        filename: "style.css",
-        code: cssBuffer,
-        minify: true,
-        sourceMap: false
-      }).code.toString();
-
-      html = html.replace("</head>", `<style>${minifiedCss}</style>\n</head>`);
-
-      const widgetLoaderScript = `<script src="/widget-loader.js" async></script>`;
-      html = html.replace("</body>", `${widgetLoaderScript}\n</body>`);
-
-      const minifiedHtml = await minify(html, {
-        collapseWhitespace: true,
-        removeComments: true,
-        minifyJS: true,
-        minifyCSS: true
+      const html = await renderVersionHtml({
+        html: landing.currentVersion.html,
+        css: landing.currentVersion.css,
+        customCss: landing.currentVersion.customCss,
+        customJs: landing.currentVersion.customJs,
+        grapesJson: landing.currentVersion.grapesJson
       });
 
-      return { html: minifiedHtml };
+      return { html };
     } catch (error) {
       throw new BadRequestException("Build preview failed: " + (error as Error).message);
     }

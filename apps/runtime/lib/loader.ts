@@ -6,6 +6,8 @@ import type { LandingContext } from "@workspace/types";
 import type { WidgetRenderContext, WidgetSpec } from "@workspace/widgets";
 
 type RuntimeSnapshot = {
+  cssText?: string;
+  htmlSections: Array<{ id: string; html: string }>;
   specs: WidgetSpec[];
 };
 
@@ -68,11 +70,15 @@ const loadLandingRuntimeData = cache(
         env: process.env.NODE_ENV === "production" ? "production" : "development",
         locale: payload.context.lang
       },
-      needsWidgetRuntimeLoader: payload.snapshot.specs.some(
-        (spec) =>
-          typeof spec.props.widgetBundleUrl === "string" ||
-          typeof spec.props.widgetVersion === "string"
-      )
+      needsWidgetRuntimeLoader:
+        payload.snapshot.specs.some(
+          (spec) =>
+            typeof spec.props.widgetBundleUrl === "string" ||
+            typeof spec.props.widgetVersion === "string"
+        ) ||
+        payload.snapshot.htmlSections.some((section) =>
+          /data-widget(?:=|-)["']?/i.test(section.html)
+        )
     };
   }
 );
@@ -96,6 +102,9 @@ function normalizePayload(input: unknown): RuntimeLandingPayload | null {
   }
 
   const specs = normalizeSpecs(snapshot.specs);
+  const htmlSections = normalizeHtmlSections(
+    (snapshot as { htmlSections?: unknown }).htmlSections
+  );
 
   return {
     landingId,
@@ -104,7 +113,11 @@ function normalizePayload(input: unknown): RuntimeLandingPayload | null {
     title,
     description: asOptionalString(data.description),
     context,
-    snapshot: { specs },
+    snapshot: {
+      specs,
+      htmlSections,
+      cssText: asOptionalString((snapshot as { cssText?: unknown }).cssText)
+    },
     versionId,
     isDraft: Boolean(data.isDraft)
   };
@@ -137,6 +150,30 @@ function normalizeSpecs(input: unknown): WidgetSpec[] {
       } satisfies WidgetSpec;
     })
     .filter((item): item is WidgetSpec => item !== null);
+}
+
+function normalizeHtmlSections(input: unknown) {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  return input
+    .map((entry, index) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+
+      const row = entry as Record<string, unknown>;
+      const id = asString(row.id) ?? `section-${index + 1}`;
+      const html = asString(row.html);
+
+      if (!html) {
+        return null;
+      }
+
+      return { id, html };
+    })
+    .filter((item): item is { id: string; html: string } => item !== null);
 }
 
 function asString(value: unknown): string | null {

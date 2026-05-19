@@ -44,7 +44,13 @@ if (!defined('LS_BRIDGE_BOOTSTRAPPED')) {
             $fallbackTtl
         );
 
-        $rewriter = $bridge->buildRewriter();
+        $runtimeContext = $bridge->resolveRuntimeContext();
+        foreach ($runtimeContext['phpVars'] as $name => $value) {
+            $GLOBALS[$name] = $value;
+            ${$name} = $value;
+        }
+
+        $rewriter = new \Lendsphera\LegacyBridge\Rewriter($runtimeContext['vars'], $placeholderMap);
         ob_start([$rewriter, 'outputBufferHandler'], 0, PHP_OUTPUT_HANDLER_CLEANABLE | PHP_OUTPUT_HANDLER_FLUSHABLE | PHP_OUTPUT_HANDLER_REMOVABLE);
     }
 }

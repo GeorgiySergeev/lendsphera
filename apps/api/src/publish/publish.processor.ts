@@ -2,17 +2,12 @@ import { Processor, WorkerHost } from "@nestjs/bullmq";
 import { Logger } from "@nestjs/common";
 import { LandingStatus, PublishJobStatus } from "@prisma/client";
 import { Job } from "bullmq";
-import { minify } from "html-minifier-terser";
-import { transform } from "lightningcss";
-import postcss from "postcss";
-import type { AcceptedPlugin } from "postcss";
-// @ts-expect-error: no types available for tailwindcss
-import tailwindcss from "tailwindcss";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 import { env } from "../config/env";
 import { EventBusService } from "../events/event-bus.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { renderVersionHtml } from "./render-version";
 
 interface PublishJobData {
   publishJobId: string;
@@ -67,53 +62,13 @@ export class PublishProcessor extends WorkerHost {
         throw new Error("Target version is missing or not current.");
       }
 
-      const version = landing.currentVersion;
-      let html = version.html || "";
-
-      log("Compiling Tailwind CSS...");
-      const tailwindPlugin = tailwindcss as unknown as (
-        options: Record<string, unknown>
-      ) => AcceptedPlugin;
-      const tailwindProcessor = postcss([
-        tailwindPlugin({
-          content: [{ raw: html, extension: "html" }],
-          theme: { extend: {} },
-          corePlugins: { preflight: true }
-        })
-      ]);
-      const twResult = await tailwindProcessor.process(
-        "@tailwind base;\n@tailwind components;\n@tailwind utilities;",
-        {
-          from: undefined
-        }
-      );
-      let finalCss = twResult.css;
-
-      log("Inlining custom CSS...");
-      if (version.customCss) {
-        finalCss += "\n" + version.customCss;
-      }
-
-      log("Minifying CSS...");
-      const minifiedCss = transform({
-        filename: "style.css",
-        code: Buffer.from(finalCss),
-        minify: true,
-        sourceMap: false
-      }).code.toString();
-
-      html = html.replace("</head>", `<style>${minifiedCss}</style>\n</head>`);
-
-      log("Injecting widget loader...");
-      const widgetLoaderScript = `<script src="/widget-loader.js" async></script>`;
-      html = html.replace("</body>", `${widgetLoaderScript}\n</body>`);
-
-      log("Minifying HTML...");
-      const minifiedHtml = await minify(html, {
-        collapseWhitespace: true,
-        removeComments: true,
-        minifyJS: true,
-        minifyCSS: true
+      log("Rendering publish HTML...");
+      const minifiedHtml = await renderVersionHtml({
+        html: landing.currentVersion.html,
+        css: landing.currentVersion.css,
+        customCss: landing.currentVersion.customCss,
+        customJs: landing.currentVersion.customJs,
+        grapesJson: landing.currentVersion.grapesJson
       });
 
       log("Generating sitemap and robots.txt...");

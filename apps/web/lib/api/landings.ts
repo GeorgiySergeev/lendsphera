@@ -107,12 +107,26 @@ type LandingVersion = {
   };
 };
 
+type LandingImportedVariable = {
+  detectedKey: string;
+  detectedSyntax: string;
+  draftValue: string;
+  effectiveValue: string;
+  isEditable: boolean;
+  isMapped: boolean;
+  isOverridden: boolean;
+  placeholderKey: string | null;
+  runtimeKey: string | null;
+  source: "php" | "placeholder";
+};
+
 type LandingEditorDocument = {
   assets?: unknown[];
   components?: unknown;
   css?: string;
   customCss?: string;
   html?: string;
+  importedVariables?: LandingImportedVariable[];
   layout?: LandingEditorLayout;
   placeholderValues?: PlaceholderValue;
   styles?: unknown;
@@ -216,6 +230,17 @@ type CreateLandingWizardPayloadInput = {
   geoId: string;
   publicId: string;
   template: TemplateOption;
+  variantId: string;
+};
+
+type CreateLandingFromZipPayload = {
+  categoryId: string;
+  file: File;
+  geoId: string;
+  name: string;
+  publicId?: string;
+  slug: string;
+  templateId?: string;
   variantId: string;
 };
 
@@ -349,6 +374,30 @@ async function createLanding(payload: CreateLandingPayload) {
   return response.data;
 }
 
+async function createLandingFromZip(payload: CreateLandingFromZipPayload) {
+  const formData = new FormData();
+  formData.append("file", payload.file);
+  formData.append("name", payload.name);
+  formData.append("slug", payload.slug);
+  formData.append("geoId", payload.geoId);
+  formData.append("categoryId", payload.categoryId);
+  formData.append("variantId", payload.variantId);
+
+  if (payload.templateId) {
+    formData.append("templateId", payload.templateId);
+  }
+
+  if (payload.publicId) {
+    formData.append("publicId", payload.publicId);
+  }
+
+  const response = await apiClient.post<LandingRow>("/landings/from-zip", formData, {
+    headers: { "Content-Type": "multipart/form-data" }
+  });
+
+  return response.data;
+}
+
 async function fetchLanding(landingId: string) {
   const response = await apiClient.get<LandingDetail>(`/landings/${landingId}`);
 
@@ -359,6 +408,21 @@ async function updateLanding(landingId: string, payload: Partial<CreateLandingPa
   const response = await apiClient.patch<LandingDetail>(
     `/landings/${landingId}`,
     payload
+  );
+
+  return response.data;
+}
+
+async function replaceLandingDraftFromZip(landingId: string, file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await apiClient.post<LandingEditorDraftResponse>(
+    `/landings/${landingId}/import-zip`,
+    formData,
+    {
+      headers: { "Content-Type": "multipart/form-data" }
+    }
   );
 
   return response.data;
@@ -521,6 +585,7 @@ export {
   bulkDeleteLandings,
   bulkUpdateLandingStatus,
   createLanding,
+  createLandingFromZip,
   createLandingPreviewToken,
   deleteLanding,
   duplicateLanding,
@@ -541,6 +606,7 @@ export {
   landingStatuses,
   publishLandingDraft,
   rejectLandingForPublish,
+  replaceLandingDraftFromZip,
   runLandingBulkOperation,
   refreshLandingLock,
   releaseLandingLock,
@@ -551,12 +617,14 @@ export {
 };
 export type {
   CategoryOption,
+  CreateLandingFromZipPayload,
   CreateLandingPayload,
   GeoOption,
   LandingDetail,
   LandingEditorDocument,
   LandingEditorDraftPayload,
   LandingEditorDraftResponse,
+  LandingImportedVariable,
   LandingNameAvailability,
   LandingListFilters,
   LandingPublicIdSuggestion,

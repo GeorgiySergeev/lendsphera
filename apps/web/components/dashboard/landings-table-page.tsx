@@ -67,6 +67,7 @@ import {
 import {
   bulkDeleteLandings,
   bulkUpdateLandingStatus,
+  createLandingFromZip,
   deleteLanding,
   duplicateLanding,
   fetchCategoryOptions,
@@ -78,7 +79,8 @@ import {
   landingStatuses,
   type GeoOption,
   type LandingRow,
-  type LandingStatus
+  type LandingStatus,
+  type TemplateOption
 } from "../../lib/api/landings";
 import { useBuilderPages } from "../../hooks/use-builder";
 import { CreateLandingWizard } from "./create-landing-wizard";
@@ -115,6 +117,7 @@ function LandingsTablePage() {
   const [duplicateTarget, setDuplicateTarget] = React.useState<LandingRow | null>(null);
   const [duplicateGeoId, setDuplicateGeoId] = React.useState("");
   const [duplicateError, setDuplicateError] = React.useState<string | null>(null);
+  const [zipImportOpen, setZipImportOpen] = React.useState(false);
   const [versionsTarget, setVersionsTarget] = React.useState<LandingRow | null>(null);
   const [filters, setFilters] = useQueryStates(filterParsers);
   const [builderDraftsView, setBuilderDraftsView] =
@@ -197,6 +200,13 @@ function LandingsTablePage() {
       await invalidateLandings();
     }
   });
+  const zipImportMutation = useMutation({
+    mutationFn: createLandingFromZip,
+    onSuccess: async () => {
+      setZipImportOpen(false);
+      await invalidateLandings();
+    }
+  });
 
   const columns = React.useMemo(
     () =>
@@ -243,12 +253,18 @@ function LandingsTablePage() {
               Manage landing pages, publication state, GEO coverage, and revisions.
             </p>
           </div>
-          <CreateLandingWizard
-            geos={geosQuery.data ?? []}
-            geosLoading={geosQuery.isLoading}
-            variants={variantsQuery.data ?? []}
-            variantsLoading={variantsQuery.isLoading}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={() => setZipImportOpen(true)}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Import ZIP
+            </Button>
+            <CreateLandingWizard
+              geos={geosQuery.data ?? []}
+              geosLoading={geosQuery.isLoading}
+              variants={variantsQuery.data ?? []}
+              variantsLoading={variantsQuery.isLoading}
+            />
+          </div>
         </div>
 
         <LandingsFiltersBar
@@ -496,6 +512,17 @@ function LandingsTablePage() {
             setVersionsTarget(null);
           }
         }}
+      />
+
+      <ImportZipDialog
+        categories={categoriesQuery.data ?? []}
+        geos={geosQuery.data ?? []}
+        onOpenChange={setZipImportOpen}
+        onSubmit={(payload) => zipImportMutation.mutate(payload)}
+        open={zipImportOpen}
+        pending={zipImportMutation.isPending}
+        templates={[]}
+        variants={variantsQuery.data ?? []}
       />
 
       <AlertDialog
@@ -1018,6 +1045,217 @@ function DuplicateDialog({
   );
 }
 
+function ImportZipDialog({
+  categories,
+  geos,
+  onOpenChange,
+  onSubmit,
+  open,
+  pending,
+  templates,
+  variants
+}: {
+  categories: Array<{ id: string; name: string }>;
+  geos: GeoOption[];
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (payload: {
+    categoryId: string;
+    file: File;
+    geoId: string;
+    name: string;
+    publicId: string;
+    slug: string;
+    templateId?: string;
+    variantId: string;
+  }) => void;
+  open: boolean;
+  pending: boolean;
+  templates: TemplateOption[];
+  variants: Array<{ id: string; name: string }>;
+}) {
+  const [categoryId, setCategoryId] = React.useState("");
+  const [file, setFile] = React.useState<File | null>(null);
+  const [geoId, setGeoId] = React.useState("");
+  const [name, setName] = React.useState("");
+  const [publicId, setPublicId] = React.useState("");
+  const [templateId, setTemplateId] = React.useState("auto");
+  const [variantId, setVariantId] = React.useState("");
+
+  React.useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    setGeoId((current) => current || geos[0]?.id || "");
+    setCategoryId((current) => current || categories[0]?.id || "");
+    setVariantId((current) => current || variants[0]?.id || "");
+  }, [categories, geos, open, variants]);
+
+  const canSubmit = Boolean(
+    file && name.trim() && publicId.trim() && geoId && categoryId && variantId
+  );
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        onOpenChange(nextOpen);
+        if (!nextOpen) {
+          setFile(null);
+          setName("");
+          setPublicId("");
+          setTemplateId("auto");
+        }
+      }}
+    >
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Import landing from ZIP</DialogTitle>
+          <DialogDescription>
+            Create a new landing draft from a ZIP archive with HTML, CSS, and assets.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="zip-name">
+                Name
+              </label>
+              <input
+                id="zip-name"
+                className="w-full rounded-md border px-3 py-2 text-sm"
+                value={name}
+                onChange={(event) => {
+                  const nextName = event.target.value;
+                  setName(nextName);
+                  if (!publicId) {
+                    setPublicId(slugifyLandingValue(nextName));
+                  }
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium" htmlFor="zip-public-id">
+                Public ID
+              </label>
+              <input
+                id="zip-public-id"
+                className="w-full rounded-md border px-3 py-2 text-sm"
+                value={publicId}
+                onChange={(event) => setPublicId(slugifyLandingValue(event.target.value))}
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Select value={geoId} onValueChange={setGeoId}>
+              <SelectTrigger aria-label="ZIP import GEO">
+                <SelectValue placeholder="GEO" />
+              </SelectTrigger>
+              <SelectContent>
+                {geos.map((geo) => (
+                  <SelectItem key={geo.id} value={geo.id}>
+                    {geo.code} · {geo.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={categoryId} onValueChange={setCategoryId}>
+              <SelectTrigger aria-label="ZIP import category">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={variantId} onValueChange={setVariantId}>
+              <SelectTrigger aria-label="ZIP import variant">
+                <SelectValue placeholder="Variant" />
+              </SelectTrigger>
+              <SelectContent>
+                {variants.map((variant) => (
+                  <SelectItem key={variant.id} value={variant.id}>
+                    {variant.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Select value={templateId} onValueChange={setTemplateId}>
+            <SelectTrigger aria-label="ZIP import template">
+              <SelectValue placeholder="Template mapping" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">Auto template</SelectItem>
+              {templates.map((template) => (
+                <SelectItem key={template.id} value={template.id}>
+                  {template.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium" htmlFor="zip-file">
+              ZIP file
+            </label>
+            <input
+              id="zip-file"
+              accept=".zip,application/zip"
+              className="block w-full rounded-md border px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-2 file:text-sm"
+              type="file"
+              onChange={(event) => {
+                const nextFile = event.target.files?.[0] ?? null;
+                setFile(nextFile);
+                if (nextFile && !name) {
+                  const inferredName = nextFile.name
+                    .replace(/\.zip$/i, "")
+                    .replace(/[-_]+/g, " ");
+                  setName(inferredName);
+                  setPublicId(slugifyLandingValue(inferredName));
+                }
+              }}
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            disabled={!canSubmit || pending}
+            onClick={() => {
+              if (!file) {
+                return;
+              }
+
+              onSubmit({
+                categoryId,
+                file,
+                geoId,
+                name: name.trim(),
+                publicId: publicId.trim(),
+                slug: publicId.trim(),
+                templateId: templateId === "auto" ? undefined : templateId,
+                variantId
+              });
+            }}
+          >
+            Import ZIP
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function VersionsDialog({
   landing,
   versions,
@@ -1158,6 +1396,16 @@ function formatDate(value: string) {
     month: "short",
     year: "numeric"
   }).format(new Date(value));
+}
+
+function slugifyLandingValue(value: string) {
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "imported-landing"
+  );
 }
 
 export { LandingsTablePage };

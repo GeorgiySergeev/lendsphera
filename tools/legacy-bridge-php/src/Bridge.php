@@ -8,6 +8,19 @@ use Throwable;
 
 final class Bridge
 {
+    private const PHP_ALIAS_MAP = [
+        'PRODUCT_NAME' => 'LS_PRODUCT_NAME',
+        'PRODUCT_PRICE' => 'LS_PRICE',
+        'PRODUCT_OLD_PRICE' => 'LS_OLD_PRICE',
+        'PRODUCT_IMAGE_PATH' => 'LS_PRODUCT_IMAGE',
+        'CURRENCY' => 'LS_CURRENCY',
+        'DISCOUNT' => 'LS_DISCOUNT',
+        'CTA' => 'LS_CTA',
+        'DISCLAIMER' => 'LS_DISCLAIMER',
+        'PIXEL_ID' => 'LS_PIXEL_ID',
+        'POSTBACK_URL' => 'LS_POSTBACK_URL',
+    ];
+
     public function __construct(
         private readonly Client $client,
         private readonly Cache $cache,
@@ -40,5 +53,49 @@ final class Bridge
     public function buildRewriter(): Rewriter
     {
         return new Rewriter($this->resolveVars(), $this->legacyMap);
+    }
+
+    public function resolveRuntimeContext(): array
+    {
+        $vars = $this->resolveVars();
+
+        return [
+            'vars' => $vars,
+            'phpVars' => $this->buildPhpCompatVars($vars),
+        ];
+    }
+
+    public function buildPhpCompatVars(array $vars): array
+    {
+        $normalizedVars = [];
+        foreach ($vars as $key => $value) {
+            if (!is_scalar($value)) {
+                continue;
+            }
+
+            $normalizedKey = strtoupper((string) $key);
+            if (!$this->isValidPhpVariableName($normalizedKey)) {
+                continue;
+            }
+
+            $normalizedVars[$normalizedKey] = (string) $value;
+        }
+
+        $phpVars = ['LS_RUNTIME_VARS' => $normalizedVars];
+
+        foreach ($normalizedVars as $key => $value) {
+            $phpVars[$key] = $value;
+        }
+
+        foreach (self::PHP_ALIAS_MAP as $alias => $runtimeKey) {
+            $phpVars[$alias] = $normalizedVars[$runtimeKey] ?? '';
+        }
+
+        return $phpVars;
+    }
+
+    private function isValidPhpVariableName(string $name): bool
+    {
+        return preg_match('/^[A-Z_][A-Z0-9_]*$/', $name) === 1;
     }
 }

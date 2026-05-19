@@ -73,6 +73,14 @@ export class StorageService {
     );
   }
 
+  getObjectUrl(key: string): string {
+    const encodedKey = key
+      .split("/")
+      .map((segment) => encodeURIComponent(segment))
+      .join("/");
+    return new URL(`${env.S3_BUCKET}/${encodedKey}`, env.S3_ENDPOINT).toString();
+  }
+
   private async ensureBucket() {
     try {
       await this.client.send(new HeadBucketCommand({ Bucket: env.S3_BUCKET }));

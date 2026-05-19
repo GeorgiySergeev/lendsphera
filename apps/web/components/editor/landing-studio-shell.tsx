@@ -15,26 +15,37 @@ import {
 import "@grapesjs/studio-sdk/style";
 
 import * as React from "react";
+import type { PlaceholderValue } from "@workspace/types";
 
 import { Button, Dialog, DialogContent, DialogHeader, DialogTitle } from "@workspace/ui";
 
 import {
   acquireLandingLock,
+  createLandingPreviewToken,
   fetchLanding,
   fetchLandingEditorDocument,
-  createLandingPreviewToken,
   refreshLandingLock,
   releaseLandingLock,
   saveLandingDraftVersion,
   updateLanding,
   type LandingDetail,
   type LandingEditorDocument,
-  type LandingEditorDraftPayload
+  type LandingEditorDraftPayload,
+  type LandingImportedVariable
 } from "../../lib/api/landings";
 import { apiClient } from "../../lib/api/client";
 import { componentsApi } from "../../lib/api/components";
+import { fetchMedia, type MediaAsset } from "../../lib/api/media";
+import {
+  applyImportedVariableDraft,
+  deriveImportedVariablesFallback,
+  normalizePlaceholderValues,
+  resetImportedVariableDraft
+} from "../../lib/editor/imported-variables";
 import { toast } from "../../lib/toast";
 import { useDashboardTopbarStore } from "../../stores/dashboard-topbar-store";
+import { LandingImportedVariablesPanel } from "./landing-imported-variables-panel";
+import { LandingProjectAssetsDialog } from "./landing-project-assets-dialog";
 import { PreviewPane } from "./preview-pane";
 
 type LandingStudioShellProps = {
@@ -122,6 +133,7 @@ const templatesPanelLayout = {
 
 function LandingStudioShell({ landingId }: LandingStudioShellProps) {
   const editorRef = React.useRef<any>(null);
+  const projectAssetInventoryRef = React.useRef<StudioAsset[]>([]);
   const studioRootRef = React.useRef<HTMLDivElement | null>(null);
   const studioInitRef = React.useRef(false);
   const lockStatusRef = React.useRef<"acquiring" | "locked" | "lost" | "error" | null>(
@@ -133,12 +145,37 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
   const [isPreviewLoading, setIsPreviewLoading] = React.useState(false);
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [landing, setLanding] = React.useState<LandingDetail | null>(null);
+  const [landingVariables, setLandingVariables] = React.useState<
+    LandingImportedVariable[]
+  >([]);
+  const [landingProjectAssets, setLandingProjectAssets] = React.useState<MediaAsset[]>(
+    []
+  );
+  const [placeholderValues, setPlaceholderValues] = React.useState<PlaceholderValue>({});
   const [landingMetaError, setLandingMetaError] = React.useState<string | null>(null);
   const [isNameSaving, setIsNameSaving] = React.useState(false);
+  const [isProjectAssetsDialogOpen, setIsProjectAssetsDialogOpen] = React.useState(false);
+  const [isVariablesPanelOpen, setIsVariablesPanelOpen] = React.useState(true);
+  const placeholderValuesRef = React.useRef<PlaceholderValue>({});
+  const landingVariablesRef = React.useRef<LandingImportedVariable[]>([]);
   const setLandingContext = useDashboardTopbarStore((state) => state.setLandingContext);
   const clearLandingContext = useDashboardTopbarStore(
     (state) => state.clearLandingContext
   );
+
+  React.useEffect(() => {
+    placeholderValuesRef.current = placeholderValues;
+  }, [placeholderValues]);
+
+  React.useEffect(() => {
+    landingVariablesRef.current = landingVariables;
+  }, [landingVariables]);
+
+  React.useEffect(() => {
+    if (landingVariables.length > 0) {
+      setIsVariablesPanelOpen(true);
+    }
+  }, [landingVariables.length]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -188,6 +225,21 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
     [landing, landingId]
   );
 
+  const refreshLandingProjectAssets = React.useCallback(async () => {
+    try {
+      const response = await fetchMedia({
+        landingId,
+        limit: 100,
+        page: 1,
+        sortBy: "createdAt",
+        sortOrder: "desc"
+      });
+      setLandingProjectAssets(response.items);
+    } catch {
+      setLandingProjectAssets([]);
+    }
+  }, [landingId]);
+
   React.useEffect(() => {
     if (!landing) {
       return;
@@ -198,12 +250,22 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
       name: landing.name,
       status: landing.status,
       publicId: landing.publicId,
+      slug: landing.slug,
+      geoCode: landing.geo?.code,
+      geoFlagEmoji: landing.geo?.flagEmoji,
       geoName: landing.geo?.name,
+      categoryName: landing.category?.name,
+      variantName: landing.variant?.name,
       templateName: landing.template?.name,
       updatedAt: landing.updatedAt,
       metaError: landingMetaError,
       isRenaming: isNameSaving,
-      onRename: renameLanding
+      onRename: renameLanding,
+      onProjectAssetsOpen: () => setIsProjectAssetsDialogOpen(true),
+      projectAssetsCount: landingProjectAssets.filter((asset) => !asset.isMuted).length,
+      onVariablesOpenChange: setIsVariablesPanelOpen,
+      variablesCount: landingVariables.length,
+      variablesDescription: "Legacy PHP and runtime placeholders"
     });
 
     return () => {
@@ -213,10 +275,16 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
     clearLandingContext,
     isNameSaving,
     landing,
+    landingProjectAssets,
+    landingVariables.length,
     landingMetaError,
     renameLanding,
     setLandingContext
   ]);
+
+  React.useEffect(() => {
+    void refreshLandingProjectAssets();
+  }, [refreshLandingProjectAssets]);
 
   React.useEffect(() => {
     let heartbeatInterval: NodeJS.Timeout | null = null;
@@ -279,13 +347,29 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
         return;
       }
 
-      const payload = toDraftPayload(project, editor);
+      const payload = toDraftPayload(project, editor, placeholderValuesRef.current);
       void saveLandingDraftVersion(landingId, payload);
     };
 
     window.addEventListener("pagehide", handlePageHide);
     return () => window.removeEventListener("pagehide", handlePageHide);
   }, [landingId]);
+
+  React.useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) {
+      return;
+    }
+
+    const visibleLandingAssets = normalizeStudioAssets(
+      landingProjectAssets.filter((asset) => !asset.isMuted)
+    );
+    syncProjectAssetsInEditor(editor, visibleLandingAssets);
+    projectAssetInventoryRef.current = mergeStudioAssetLists(
+      projectAssetInventoryRef.current,
+      visibleLandingAssets
+    );
+  }, [landingProjectAssets]);
 
   const studioOptions = React.useMemo(
     () => ({
@@ -299,6 +383,12 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
         storageType: "self",
         providerId: "dashboard-media-library",
         providers: [
+          {
+            id: "landing-project-assets",
+            label: "Project assets",
+            types: "image",
+            onLoad: async () => projectAssetInventoryRef.current
+          },
           {
             id: "dashboard-media-library",
             label: "Dashboard media",
@@ -315,16 +405,6 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
             }
           }
         ],
-        onLoad: async () => {
-          const assets = await loadStudioAssets();
-          if (!assets.length) {
-            toast.error(
-              "Media library is empty for this session",
-              "No readable image assets were returned by /media or /assets."
-            );
-          }
-          return assets;
-        },
         onUpload: async () => {
           toast.error(
             "Upload is not configured yet",
@@ -498,9 +578,9 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
       },
       project: {
         type: "web",
-        default: {
+        default: ensureStudioProjectShape({
           pages: [{ name: "Home", component: defaultLandingMarkup }]
-        }
+        })
       },
       templates: {
         onLoad: async () => loadStudioTemplates()
@@ -510,22 +590,61 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
         autosaveChanges: 100,
         autosaveIntervalMs: 10000,
         onSave: async ({ project, editor }: { editor: any; project: unknown }) => {
-          const payload = toDraftPayload(project, editor);
+          const payload = toDraftPayload(project, editor, placeholderValuesRef.current);
           await saveLandingDraftVersion(landingId, payload);
         },
         onLoad: async () => {
           try {
             setLoadError(null);
-            const doc = await fetchLandingEditorDocument(landingId);
+            const [doc, projectAssetsResponse] = await Promise.all([
+              fetchLandingEditorDocument(landingId),
+              fetchMedia({
+                landingId,
+                limit: 100,
+                page: 1,
+                sortBy: "createdAt",
+                sortOrder: "desc"
+              }).catch(() => ({ items: [] as MediaAsset[] }))
+            ]);
+            const project = toStudioProject(doc, landingId);
+            const visibleProjectAssets = normalizeStudioAssets(
+              projectAssetsResponse.items.filter((asset) => !asset.isMuted)
+            );
+            const projectWithLandingAssets = mergeProjectAssetsIntoStudioProject(
+              project,
+              visibleProjectAssets
+            );
+            projectAssetInventoryRef.current = normalizeStudioAssets(
+              extractAssets(projectWithLandingAssets)
+            );
+            const nextPlaceholderValues = normalizePlaceholderValues(
+              doc.placeholderValues
+            );
+            const nextVariables = doc.importedVariables?.length
+              ? doc.importedVariables
+              : deriveImportedVariablesFallback(
+                  [
+                    doc.html,
+                    extractFirstPageHtml(projectWithLandingAssets),
+                    doc.components
+                  ],
+                  nextPlaceholderValues
+                );
+            setLandingProjectAssets(projectAssetsResponse.items);
+            setLandingVariables(nextVariables);
+            setPlaceholderValues(nextPlaceholderValues);
             return {
-              project: toStudioProject(doc)
+              project: ensureStudioProjectShape(projectWithLandingAssets)
             };
           } catch {
+            setLandingProjectAssets([]);
+            setLandingVariables([]);
+            setPlaceholderValues({});
             setLoadError("The Studio editor could not load the landing draft.");
             return {
-              project: {
+              project: ensureStudioProjectShape({
                 pages: [{ name: "Home", component: defaultLandingMarkup }]
-              }
+              })
             };
           }
         }
@@ -547,6 +666,30 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
     [landingId]
   );
 
+  const handleVariableChange = React.useCallback(
+    (variable: LandingImportedVariable, nextValue: string) => {
+      const nextState = applyImportedVariableDraft(
+        landingVariablesRef.current,
+        placeholderValuesRef.current,
+        variable,
+        nextValue
+      );
+      setLandingVariables(nextState.variables);
+      setPlaceholderValues(nextState.placeholderValues);
+    },
+    []
+  );
+
+  const handleVariableReset = React.useCallback((variable: LandingImportedVariable) => {
+    const nextState = resetImportedVariableDraft(
+      landingVariablesRef.current,
+      placeholderValuesRef.current,
+      variable
+    );
+    setLandingVariables(nextState.variables);
+    setPlaceholderValues(nextState.placeholderValues);
+  }, []);
+
   async function saveCurrentDraft() {
     const editor = editorRef.current;
     if (!editor) {
@@ -557,7 +700,7 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
     if (!project) {
       throw new Error("Editor project is unavailable.");
     }
-    const payload = toDraftPayload(project, editor);
+    const payload = toDraftPayload(project, editor, placeholderValuesRef.current);
     await saveLandingDraftVersion(landingId, payload);
   }
 
@@ -610,6 +753,11 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
             return;
           }
           editorRef.current = editor;
+          applyImportedLandingEditorStyles(editor);
+          syncProjectAssetsInEditor(
+            editor,
+            normalizeStudioAssets(landingProjectAssets.filter((asset) => !asset.isMuted))
+          );
           ensureStudioTailwindCanvas(editor);
           setIsReady(true);
         },
@@ -632,8 +780,10 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
         editor.destroy();
       }
       editorRef.current = null;
+      setLandingVariables([]);
+      setPlaceholderValues({});
     };
-  }, [studioOptions]);
+  }, [landingProjectAssets, studioOptions]);
 
   if (loadError && !isReady) {
     return (
@@ -653,6 +803,38 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
       <div className="h-full overflow-hidden  border bg-background shadow-sm">
         <div ref={studioRootRef} className="h-full w-full" />
       </div>
+      {isVariablesPanelOpen ? (
+        <div
+          className="pointer-events-none fixed right-6 top-24 z-[2147483647] hidden xl:block"
+          data-variables-overlay="true"
+        >
+          <div className="pointer-events-auto flex h-[calc(100vh-8rem)] w-[380px] max-w-[calc(100vw-10rem)] flex-col overflow-hidden rounded-2xl border bg-background/98 shadow-2xl backdrop-blur">
+            <div className="flex items-center justify-between border-b px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Variables</p>
+                <p className="text-xs text-muted-foreground">
+                  Legacy PHP and runtime placeholders
+                </p>
+              </div>
+              <Button
+                className="h-8 px-3 text-xs"
+                onClick={() => setIsVariablesPanelOpen(false)}
+                type="button"
+                variant="ghost"
+              >
+                Hide
+              </Button>
+            </div>
+            <div className="min-h-0 flex-1 p-3">
+              <LandingImportedVariablesPanel
+                onChange={handleVariableChange}
+                onReset={handleVariableReset}
+                variables={landingVariables}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
         <DialogContent className="h-[90vh] max-w-[95vw] p-0">
           <DialogHeader className="border-b px-4 py-3">
@@ -667,11 +849,21 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
           ) : null}
         </DialogContent>
       </Dialog>
+      <LandingProjectAssetsDialog
+        landingId={landingId}
+        open={isProjectAssetsDialogOpen}
+        onAssetsChanged={refreshLandingProjectAssets}
+        onOpenChange={setIsProjectAssetsDialogOpen}
+      />
     </div>
   );
 }
 
-function toDraftPayload(project: unknown, editor: any): LandingEditorDraftPayload {
+function toDraftPayload(
+  project: unknown,
+  editor: any,
+  placeholderValues: PlaceholderValue
+): LandingEditorDraftPayload {
   return {
     assets: extractAssets(project),
     components: project,
@@ -684,31 +876,118 @@ function toDraftPayload(project: unknown, editor: any): LandingEditorDraftPayloa
         : extractFirstPageHtml(project),
     layout: {},
     message: "Saved from Studio SDK",
-    placeholderValues: {},
+    placeholderValues,
     source: "studio-sdk"
   };
 }
 
-function toStudioProject(doc: LandingEditorDocument) {
-  const maybeProject = doc.components;
+function applyImportedLandingEditorStyles(editor: any) {
+  const project =
+    typeof editor?.getProjectData === "function" ? editor.getProjectData() : null;
+  const styles = (project as { pages?: Array<{ styles?: string }> })?.pages?.[0]?.styles;
 
-  if (isStudioProject(maybeProject)) {
-    return maybeProject;
+  if (typeof styles !== "string" || !styles.trim()) {
+    return;
   }
 
-  const component = doc.components ?? doc.html ?? defaultLandingMarkup;
-  const styles = [doc.css, doc.customCss].filter(Boolean).join("\n");
+  if (typeof editor?.Css?.addRules === "function") {
+    editor.Css.addRules(styles);
+  } else if (typeof editor?.setStyle === "function") {
+    editor.setStyle(styles);
+  }
+}
 
-  return {
-    assets: Array.isArray(doc.assets) ? doc.assets : [],
-    pages: [
-      {
-        name: "Home",
-        component,
-        styles
+function toStudioProject(doc: LandingEditorDocument, landingId: string) {
+  const editorAssetToken = (doc as LandingEditorDocument & { editorAssetToken?: string })
+    .editorAssetToken;
+  const maybeProject = doc.components;
+
+  let project: unknown;
+
+  if (isStudioProject(maybeProject)) {
+    const studioProject = maybeProject as { pages?: Array<Record<string, unknown>> };
+    const firstPage = studioProject.pages?.[0];
+
+    if (firstPage && typeof doc.styles === "string" && doc.styles.trim()) {
+      project = {
+        ...studioProject,
+        pages: [
+          { ...firstPage, styles: doc.styles },
+          ...(studioProject.pages?.slice(1) ?? [])
+        ]
+      };
+    } else {
+      project = maybeProject;
+    }
+  } else {
+    const component = doc.components ?? doc.html ?? defaultLandingMarkup;
+    const styles = [doc.css, doc.customCss].filter(Boolean).join("\n");
+
+    project = {
+      assets: Array.isArray(doc.assets) ? doc.assets : [],
+      pages: [
+        {
+          name: "Home",
+          component,
+          styles
+        }
+      ]
+    };
+  }
+
+  if (editorAssetToken) {
+    return ensureStudioProjectShape(
+      refreshEditorAssetUrlsInValue(landingId, project, editorAssetToken)
+    );
+  }
+
+  return ensureStudioProjectShape(project);
+}
+
+function refreshEditorAssetUrlsInValue(
+  landingId: string,
+  input: unknown,
+  token: string
+): unknown {
+  if (typeof input === "string") {
+    return refreshEditorAssetUrlsInText(landingId, input, token);
+  }
+
+  if (Array.isArray(input)) {
+    return input.map((item) => refreshEditorAssetUrlsInValue(landingId, item, token));
+  }
+
+  if (input && typeof input === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+      result[key] = refreshEditorAssetUrlsInValue(landingId, value, token);
+    }
+    return result;
+  }
+
+  return input;
+}
+
+function refreshEditorAssetUrlsInText(landingId: string, text: string, token: string) {
+  const tokenParam = `token=${encodeURIComponent(token)}`;
+  const withRelativeProxyUrls = text.replace(
+    /https?:\/\/[^"'()\s]+\/api\/landings\/[^"'()\s]+/gi,
+    (match) => {
+      try {
+        const url = new URL(match);
+        return `${url.pathname}${url.search}`;
+      } catch {
+        return match;
       }
-    ]
-  };
+    }
+  );
+  const encodedLandingId = encodeURIComponent(landingId);
+  const proxyPattern = new RegExp(
+    `(/api/landings/${encodedLandingId}/assets/[^"'\\s?)]+)(?:\\?token=[^"'\\s)?]+)?`,
+    "g"
+  );
+
+  return withRelativeProxyUrls.replace(proxyPattern, `$1?${tokenParam}`);
 }
 
 function isStudioProject(value: unknown): value is { pages: unknown[] } {
@@ -736,12 +1015,97 @@ function extractFirstPageHtml(project: unknown) {
     ? (project as any).pages[0]
     : null;
   const component = firstPage?.component;
+  const frameContent = firstPage?.frames?.[0]?.component?.content;
 
   if (typeof component === "string" && component.trim()) {
     return component;
   }
 
+  if (typeof frameContent === "string" && frameContent.trim()) {
+    return frameContent;
+  }
+
   return defaultLandingMarkup;
+}
+
+function mergeProjectAssetsIntoStudioProject(project: unknown, assets: StudioAsset[]) {
+  if (!project || typeof project !== "object") {
+    return project;
+  }
+
+  const existingAssets = normalizeStudioAssets(extractAssets(project));
+  const mergedAssets = [...existingAssets];
+  const seenKeys = new Set(
+    existingAssets.map((asset) => asset.id ?? asset.src).filter(Boolean)
+  );
+
+  for (const asset of assets) {
+    const key = asset.id ?? asset.src;
+    if (!key || seenKeys.has(key)) {
+      continue;
+    }
+
+    seenKeys.add(key);
+    mergedAssets.push(asset);
+  }
+
+  return {
+    ...(project as Record<string, unknown>),
+    assets: mergedAssets
+  };
+}
+
+function ensureStudioProjectShape(project: unknown) {
+  const source =
+    project && typeof project === "object" ? (project as Record<string, unknown>) : {};
+  const pagesInput = Array.isArray(source.pages) ? source.pages : [];
+  const pages = (
+    pagesInput.length ? pagesInput : [{ name: "Home", component: defaultLandingMarkup }]
+  ).map((page, index) => {
+    const pageRecord =
+      page && typeof page === "object" ? (page as Record<string, unknown>) : {};
+    const hasLegacyComponent =
+      typeof pageRecord.component === "string" && pageRecord.component.trim().length > 0;
+    const framesInput = Array.isArray(pageRecord.frames) ? pageRecord.frames : [];
+    const frames = framesInput.length
+      ? framesInput.map((frame) => {
+          const frameRecord =
+            frame && typeof frame === "object" ? (frame as Record<string, unknown>) : {};
+          const existingFrameComponent = frameRecord.component;
+          const fallbackComponent = hasLegacyComponent
+            ? pageRecord.component
+            : defaultLandingMarkup;
+
+          return {
+            ...frameRecord,
+            component:
+              existingFrameComponent !== undefined
+                ? existingFrameComponent
+                : fallbackComponent
+          };
+        })
+      : [
+          {
+            component: hasLegacyComponent ? pageRecord.component : defaultLandingMarkup
+          }
+        ];
+
+    return {
+      ...pageRecord,
+      name:
+        typeof pageRecord.name === "string" && pageRecord.name.trim()
+          ? pageRecord.name
+          : `Page ${index + 1}`,
+      ...(hasLegacyComponent ? { component: pageRecord.component } : {}),
+      frames
+    };
+  });
+
+  return {
+    ...source,
+    assets: Array.isArray(source.assets) ? source.assets : [],
+    pages
+  };
 }
 
 export { LandingStudioShell };
@@ -757,6 +1121,8 @@ const studioLibraryBlockPrefix = "library-component:";
 const studioTailwindScriptUrl = "https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4";
 const studioComponentCssCache = new Map<string, string>();
 const studioComponentDetailRequests = new Map<string, Promise<string>>();
+let studioSharedAssetsPromise: Promise<StudioAsset[]> | null = null;
+let studioSharedAssetsCache: StudioAsset[] | null = null;
 
 function createStudioComponentsBlocksPlugin() {
   return (editor: any) => {
@@ -1024,38 +1390,58 @@ async function loadStudioTemplates(): Promise<StudioTemplate[]> {
 }
 
 async function loadStudioAssets(): Promise<StudioAsset[]> {
+  if (studioSharedAssetsCache) {
+    return studioSharedAssetsCache;
+  }
+
+  if (studioSharedAssetsPromise) {
+    return studioSharedAssetsPromise;
+  }
+
   const mediaParams = {
     limit: 100,
     page: 1,
     sortBy: "createdAt",
     sortOrder: "desc"
   } as const;
-  const assetsParams = { limit: 200, page: 1 };
+  const assetsParams = { limit: 100, page: 1 };
 
-  try {
-    const response = await apiClient.get("/media", { params: mediaParams });
-    const items = Array.isArray(response.data?.items) ? response.data.items : [];
-    const normalized = normalizeStudioAssets(items);
-    if (normalized.length > 0) {
-      return normalized;
-    }
-
-    const fallbackResponse = await apiClient.get("/assets", { params: assetsParams });
-    const fallbackItems = Array.isArray(fallbackResponse.data?.items)
-      ? fallbackResponse.data.items
-      : [];
-    return normalizeStudioAssets(fallbackItems);
-  } catch (error) {
-    // Backward-compatible fallback for environments still using /assets.
+  studioSharedAssetsPromise = (async () => {
     try {
-      const response = await apiClient.get("/assets", { params: assetsParams });
+      const response = await apiClient.get("/media", { params: mediaParams });
       const items = Array.isArray(response.data?.items) ? response.data.items : [];
-      return normalizeStudioAssets(items);
-    } catch {
-      console.error("Failed to load Studio assets from /media and /assets", error);
-      return [];
+      const normalized = normalizeStudioAssets(items);
+      if (normalized.length > 0) {
+        studioSharedAssetsCache = normalized;
+        return normalized;
+      }
+
+      const fallbackResponse = await apiClient.get("/assets", { params: assetsParams });
+      const fallbackItems = Array.isArray(fallbackResponse.data?.items)
+        ? fallbackResponse.data.items
+        : [];
+      const fallbackNormalized = normalizeStudioAssets(fallbackItems);
+      studioSharedAssetsCache = fallbackNormalized;
+      return fallbackNormalized;
+    } catch (error) {
+      // Backward-compatible fallback for environments still using /assets.
+      try {
+        const response = await apiClient.get("/assets", { params: assetsParams });
+        const items = Array.isArray(response.data?.items) ? response.data.items : [];
+        const fallbackNormalized = normalizeStudioAssets(items);
+        studioSharedAssetsCache = fallbackNormalized;
+        return fallbackNormalized;
+      } catch {
+        console.error("Failed to load Studio assets from /media and /assets", error);
+        studioSharedAssetsCache = [];
+        return [];
+      }
+    } finally {
+      studioSharedAssetsPromise = null;
     }
-  }
+  })();
+
+  return studioSharedAssetsPromise;
 }
 
 function mapAssetType(type: string | undefined, mimeType: string | undefined) {
@@ -1088,6 +1474,49 @@ function normalizeStudioAssets(items: any[]): StudioAsset[] {
       };
     })
     .filter((item): item is StudioAsset => item !== null);
+}
+
+function syncProjectAssetsInEditor(editor: any, assets: StudioAsset[]) {
+  const existingProjectAssets = normalizeStudioAssets(
+    typeof editor?.getProjectData === "function"
+      ? extractAssets(editor.getProjectData())
+      : []
+  );
+  const mergedAssets = mergeStudioAssetLists(existingProjectAssets, assets);
+  const collection = editor?.AssetManager?.getAll?.();
+  if (collection && typeof collection.reset === "function") {
+    collection.reset(mergedAssets);
+  } else if (editor?.AssetManager && typeof editor.AssetManager.add === "function") {
+    editor.AssetManager.add(mergedAssets);
+  }
+
+  const project =
+    typeof editor?.getProjectData === "function" ? editor.getProjectData() : null;
+  if (project && typeof project === "object") {
+    (project as { assets?: StudioAsset[] }).assets = mergedAssets;
+  }
+}
+
+function mergeStudioAssetLists(
+  primaryAssets: StudioAsset[],
+  secondaryAssets: StudioAsset[]
+) {
+  const mergedAssets = [...primaryAssets];
+  const seenKeys = new Set(
+    primaryAssets.map((asset) => asset.id ?? asset.src).filter(Boolean)
+  );
+
+  for (const asset of secondaryAssets) {
+    const key = asset.id ?? asset.src;
+    if (!key || seenKeys.has(key)) {
+      continue;
+    }
+
+    seenKeys.add(key);
+    mergedAssets.push(asset);
+  }
+
+  return mergedAssets;
 }
 
 function resolveAssetSrc(item: any) {

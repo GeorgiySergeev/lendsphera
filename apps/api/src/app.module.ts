@@ -33,6 +33,7 @@ import { PricingModule } from "./pricing/pricing.module";
 import { ApprovalsModule } from "./landings/approvals.module";
 import { LegacyImporterModule } from "./legacy-importer/legacy-importer.module";
 import { ComplianceModule } from "./compliance/compliance.module";
+import { ZipImportModule } from "./zip-import/zip-import.module";
 
 @Module({
   imports: [
@@ -83,7 +84,8 @@ import { ComplianceModule } from "./compliance/compliance.module";
     ComplianceModule,
     PublishModule,
     EventBusModule,
-    WebhooksModule
+    WebhooksModule,
+    ZipImportModule
   ],
   controllers: [HealthController],
   providers: [

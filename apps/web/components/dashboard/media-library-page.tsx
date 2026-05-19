@@ -49,7 +49,7 @@ function MediaLibraryPage() {
   const [selectedAssetId, setSelectedAssetId] = React.useState<string | null>(null);
 
   const assetsQuery = useAssets({
-    limit: 200,
+    limit: 100,
     page: 1,
     search: search || undefined,
     type

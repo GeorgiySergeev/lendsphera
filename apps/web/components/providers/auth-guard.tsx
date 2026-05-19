@@ -37,6 +37,7 @@ function AuthGuard({ children }: AuthGuardProps) {
   const router = useRouter();
   const pathname = usePathname();
   const user = useAuthStore((state) => state.user);
+  const accessToken = useAuthStore((state) => state.accessToken);
 
   const [hasHydrated, setHasHydrated] = useState<boolean>(() =>
     useAuthStore.persist.hasHydrated()
@@ -55,7 +56,7 @@ function AuthGuard({ children }: AuthGuardProps) {
 
   useEffect(() => {
     if (!hasHydrated) return;
-    if (user) {
+    if (user && accessToken) {
       hasAttemptedRestoreRef.current = false;
       restoreInFlightRef.current = false;
       if (isCheckingSession) {
@@ -92,9 +93,9 @@ function AuthGuard({ children }: AuthGuardProps) {
     return () => {
       cancelled = true;
     };
-  }, [hasHydrated, user, pathname, router]);
+  }, [accessToken, hasHydrated, user, pathname, router]);
 
-  if (!hasHydrated || isCheckingSession || !user) {
+  if (!hasHydrated || isCheckingSession || !user || !accessToken) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <Loader2

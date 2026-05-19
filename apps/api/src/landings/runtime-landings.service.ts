@@ -3,6 +3,11 @@ import { LandingStatus, VersionStatus } from "@prisma/client";
 import type { LandingContext } from "@workspace/types";
 
 import { PrismaService } from "../prisma/prisma.service";
+import {
+  extractImportedLanding,
+  getImportedLandingCssText,
+  getImportedLandingHtmlSections
+} from "../zip-import/imported-landing.utils";
 import { LandingContextResolver } from "./landing-context.resolver";
 import { verifyPreviewToken } from "./preview-token";
 
@@ -10,6 +15,11 @@ type RuntimeWidgetSpec = {
   id: string;
   kind: string;
   props: Record<string, unknown>;
+};
+
+type RuntimeHtmlSection = {
+  html: string;
+  id: string;
 };
 
 type RuntimeLandingResult = {
@@ -20,6 +30,8 @@ type RuntimeLandingResult = {
   landingId: string;
   slug: string;
   snapshot: {
+    cssText?: string;
+    htmlSections: RuntimeHtmlSection[];
     specs: RuntimeWidgetSpec[];
   };
   title: string;
@@ -73,7 +85,11 @@ export class RuntimeLandingsService {
     }
 
     const context = await this.landingContext.resolve(landing.id);
-    const specs = this.resolveSnapshotSpecs(selected.grapesJson, selected.html ?? "");
+    const snapshot = this.resolveSnapshot(
+      selected.grapesJson,
+      selected.html ?? "",
+      selected.customCss ?? selected.css ?? ""
+    );
 
     return {
       landingId: landing.id,
@@ -82,18 +98,36 @@ export class RuntimeLandingsService {
       title: landing.name,
       description: landing.notes ?? undefined,
       context,
-      snapshot: { specs },
+      snapshot,
       versionId: selected.id,
       isDraft: canUseDraft && selected.id === draftCandidate?.id
     };
   }
 
-  private resolveSnapshotSpecs(grapesJson: unknown, html: string): RuntimeWidgetSpec[] {
+  private resolveSnapshot(grapesJson: unknown, html: string, cssText: string) {
     const fromGrapes = this.extractFromGrapes(grapesJson);
     if (fromGrapes.length > 0) {
-      return fromGrapes;
+      return {
+        specs: fromGrapes,
+        htmlSections: [] as RuntimeHtmlSection[],
+        cssText: undefined
+      };
     }
-    return this.extractFromHtml(html);
+
+    const importedLanding = extractImportedLanding(grapesJson);
+    if (importedLanding) {
+      return {
+        specs: this.extractFromHtml(importedLanding.document.rawHtml ?? html),
+        htmlSections: getImportedLandingHtmlSections(importedLanding),
+        cssText: getImportedLandingCssText(importedLanding, cssText)
+      };
+    }
+
+    return {
+      specs: this.extractFromHtml(html),
+      htmlSections: [],
+      cssText: undefined
+    };
   }
 
   private extractFromGrapes(input: unknown): RuntimeWidgetSpec[] {

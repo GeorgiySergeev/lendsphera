@@ -3,8 +3,10 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
-  Logger
+  Logger,
+  NotFoundException
 } from "@nestjs/common";
+import type { Response } from "express";
 import { AuditAction, LandingStatus, Prisma, Role, VersionStatus } from "@prisma/client";
 
 import { AuditService } from "../audit/audit.service";
@@ -14,6 +16,20 @@ import { toInputJson } from "../common/prisma-json";
 import { mapPrismaError } from "../common/prisma-errors";
 import { PrismaService } from "../prisma/prisma.service";
 import { RedisService } from "../redis/redis.service";
+import { StorageService } from "../storage/storage.service";
+import { extractImportedCodeVariables } from "../zip-import/zip-import.parser";
+import {
+  buildImportedLandingEditorProject,
+  buildImportedLandingEditorStyles,
+  extractImportedLanding,
+  findImportedAssetByPath,
+  rewriteImportedCssUrls
+} from "../zip-import/imported-landing.utils";
+import { createEditorAssetToken } from "./editor-asset-token";
+import { buildImportedVariablesViewModel } from "./imported-variables";
+import { LandingContextResolver } from "./landing-context.resolver";
+import { composeRuntimeVars } from "./runtime-vars.utils";
+import type { ImportedLanding } from "../zip-import/zip-import.types";
 import type {
   BulkLandingDeleteDto,
   BulkLandingOperationDto,
@@ -34,7 +50,9 @@ export class LandingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly storage: StorageService,
+    private readonly landingContext: LandingContextResolver
   ) {}
 
   async list(query: LandingListQueryDto) {
@@ -123,12 +141,16 @@ export class LandingsService {
     });
   }
 
-  async editor(id: string) {
+  async editor(id: string, user: AuthUser) {
     const landing = await this.prisma.landing.findUniqueOrThrow({
       where: { id },
       include: {
         template: true,
-        currentVersion: true
+        currentVersion: true,
+        versions: {
+          orderBy: { versionNum: "desc" },
+          take: 20
+        }
       }
     });
 
@@ -151,14 +173,152 @@ export class LandingsService {
       doc.placeholderValues = v.placeholders;
       const grapesJson = v.grapesJson as any;
       if (grapesJson) {
-        doc.assets = grapesJson.assets;
-        doc.components = grapesJson.components;
-        doc.layout = grapesJson.layout;
-        doc.styles = grapesJson.styles;
+        const importedLanding =
+          extractImportedLanding(grapesJson) ??
+          landing.versions
+            .map((version) => extractImportedLanding(version.grapesJson))
+            .find((candidate): candidate is NonNullable<typeof candidate> =>
+              Boolean(candidate)
+            );
+
+        if (importedLanding) {
+          const detectedVariables = importedLanding.variables?.length
+            ? importedLanding.variables
+            : extractImportedCodeVariables(importedLanding.document.rawHtml ?? "");
+          const context = await this.landingContext.resolve(id);
+          const importedVariables = buildImportedVariablesViewModel(
+            detectedVariables,
+            composeRuntimeVars(context),
+            v.placeholders
+          );
+          const editorAssetToken = createEditorAssetToken({
+            landingId: id,
+            userId: user.id
+          });
+          const inlinedStyles = await buildImportedLandingEditorStyles(
+            id,
+            importedLanding,
+            editorAssetToken,
+            (s3Key) => this.storage.getObjectBuffer(s3Key),
+            v.css
+          );
+          const studioProject = buildImportedLandingEditorProject(
+            id,
+            importedLanding,
+            editorAssetToken,
+            v.css,
+            inlinedStyles
+          );
+          doc.assets = studioProject.assets;
+          doc.components = studioProject;
+          doc.editorAssetToken = editorAssetToken;
+          doc.importedVariables = importedVariables;
+          doc.styles = inlinedStyles;
+          doc.layout = undefined;
+          // #region agent log
+          const componentText = JSON.stringify(studioProject.pages?.[0] ?? {});
+          const stylesText = String(studioProject.pages?.[0]?.styles ?? "");
+          fetch("http://127.0.0.1:7285/ingest/96a37387-d690-48d0-ba19-eb148c34d87e", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Debug-Session-Id": "3eb14a"
+            },
+            body: JSON.stringify({
+              sessionId: "3eb14a",
+              runId: "post-fix",
+              hypothesisId: "H7",
+              location: "landings.service.ts:editor",
+              message: "editor project built with inlined CSS",
+              data: {
+                landingId: id,
+                linkedCssCount: importedLanding.document.linkedCss.length,
+                stylesLength: stylesText.length,
+                stylesImportCount: (stylesText.match(/@import/g) ?? []).length,
+                stylesProxyCount: (
+                  stylesText.match(/\/api\/landings\/[^"'\s]+\/assets\//g) ?? []
+                ).length,
+                relativeJsSrcCount: (componentText.match(/src=["']js\//g) ?? []).length
+              },
+              timestamp: Date.now()
+            })
+          }).catch(() => {});
+          // #endregion
+        } else {
+          doc.assets = grapesJson.assets;
+          doc.components = grapesJson.components;
+          doc.layout = grapesJson.layout;
+          doc.styles = grapesJson.styles;
+          // #region agent log
+          const fallbackText = JSON.stringify(grapesJson.components ?? {});
+          fetch("http://127.0.0.1:7285/ingest/96a37387-d690-48d0-ba19-eb148c34d87e", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Debug-Session-Id": "3eb14a"
+            },
+            body: JSON.stringify({
+              sessionId: "3eb14a",
+              runId: "pre-fix",
+              hypothesisId: "H1",
+              location: "landings.service.ts:editor",
+              message: "editor using saved grapesJson components fallback",
+              data: {
+                landingId: id,
+                usedImportedLanding: false,
+                relativeJsSrcCount: (fallbackText.match(/src=["']js\//g) ?? []).length,
+                relativeImgSrcCount: (fallbackText.match(/src=["']images\//g) ?? [])
+                  .length,
+                hasFrames: Boolean(
+                  (grapesJson.components as { pages?: Array<{ frames?: unknown[] }> })
+                    ?.pages?.[0]?.frames?.length
+                )
+              },
+              timestamp: Date.now()
+            })
+          }).catch(() => {});
+          // #endregion
+        }
       }
     }
 
     return doc;
+  }
+
+  async streamImportedAsset(
+    landingId: string,
+    assetPath: string,
+    response: Response,
+    assetToken?: string
+  ): Promise<void> {
+    const importedLanding = await this.resolveImportedLandingSnapshot(landingId);
+    if (!importedLanding) {
+      throw new NotFoundException("Imported landing assets are unavailable.");
+    }
+
+    const asset = findImportedAssetByPath(importedLanding, assetPath);
+    if (!asset?.s3Key) {
+      throw new NotFoundException(`Asset not found: ${assetPath}`);
+    }
+
+    let buffer = await this.storage.getObjectBuffer(asset.s3Key);
+    const mimeType = asset.mimeType ?? "application/octet-stream";
+
+    if (assetToken && (mimeType.includes("css") || mimeType.includes("javascript"))) {
+      const rewriteOptions = { landingId, assetToken };
+      const rewritten = rewriteImportedCssUrls(
+        importedLanding,
+        buffer.toString("utf-8"),
+        asset.path,
+        rewriteOptions
+      );
+      buffer = Buffer.from(rewritten, "utf-8");
+    }
+
+    response.setHeader("Content-Type", mimeType);
+    response.setHeader("Cache-Control", "private, max-age=3600");
+    response.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    response.send(buffer);
   }
 
   async nameAvailability(query: LandingNameAvailabilityQueryDto) {
@@ -769,6 +929,40 @@ export class LandingsService {
       pixels:
         after.pixels === null ? Prisma.JsonNull : (after.pixels as Prisma.InputJsonValue)
     };
+  }
+
+  private async resolveImportedLandingSnapshot(
+    landingId: string
+  ): Promise<ImportedLanding | null> {
+    const landing = await this.prisma.landing.findUnique({
+      where: { id: landingId },
+      select: {
+        currentVersion: {
+          select: {
+            grapesJson: true
+          }
+        },
+        versions: {
+          orderBy: { versionNum: "desc" },
+          take: 20,
+          select: {
+            grapesJson: true
+          }
+        }
+      }
+    });
+
+    if (!landing) {
+      return null;
+    }
+
+    return (
+      extractImportedLanding(landing.currentVersion?.grapesJson) ??
+      landing.versions
+        .map((version) => extractImportedLanding(version.grapesJson))
+        .find((candidate): candidate is ImportedLanding => Boolean(candidate)) ??
+      null
+    );
   }
 
   private escapeRegex(value: string) {

@@ -2,15 +2,16 @@
 
 import {
   Bell,
+  Braces,
   Check,
   ChevronsUpDown,
+  Images,
   LogOut,
   Menu,
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
   Pencil,
-  Search,
   Settings,
   Sun,
   User,
@@ -33,6 +34,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Input,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   Separator,
   Sheet,
   SheetContent,
@@ -240,7 +244,7 @@ function DashboardSidebar({
 function DashboardTopBar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
   return (
     <header className="z-30 shrink-0 border-b bg-background/95 backdrop-blur">
-      <div className="flex h-16 items-center gap-2 px-3 sm:gap-3 sm:px-6 lg:px-8">
+      <div className="flex min-h-16 items-center gap-2 px-3 py-3 sm:gap-3 sm:px-6 lg:px-8">
         <Button
           type="button"
           variant="ghost"
@@ -251,36 +255,27 @@ function DashboardTopBar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
         >
           <Menu className="h-5 w-5" aria-hidden="true" />
         </Button>
-        <div className="relative w-40 shrink-0 sm:min-w-0 sm:flex-1 sm:max-w-md">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            aria-label="Search dashboard"
-            placeholder="Search workspace"
-            className="h-10 pl-9"
-          />
-        </div>
         <DashboardLandingContextPanel />
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="relative"
-              aria-label="Notifications"
-            >
-              <Bell className="h-5 w-5" aria-hidden="true" />
-              <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-secondary ring-2 ring-background" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Notifications</TooltipContent>
-        </Tooltip>
-        <ThemeToggle />
-        <div className="hidden sm:block">
-          <UserMenu />
+        <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="relative"
+                aria-label="Notifications"
+              >
+                <Bell className="h-5 w-5" aria-hidden="true" />
+                <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-secondary ring-2 ring-background" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Notifications</TooltipContent>
+          </Tooltip>
+          <ThemeToggle />
+          <div className="hidden sm:block">
+            <UserMenu />
+          </div>
         </div>
       </div>
     </header>
@@ -321,11 +316,8 @@ function DashboardLandingContextPanel() {
   };
 
   return (
-    <div className="hidden min-w-0 flex-1 items-center justify-center xl:flex">
-      <div className="flex min-w-0 max-w-[680px] flex-1 items-center gap-3 rounded-lg border bg-card/60 px-3 py-2 shadow-sm">
-        <Badge className="shrink-0" variant="secondary">
-          {formatTopbarLandingStatus(landingContext.status)}
-        </Badge>
+    <div className="hidden min-w-0 flex-1 items-center lg:flex">
+      <div className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-border/70 bg-muted/20 px-3 py-2">
         {isEditing ? (
           <form
             className="flex min-w-0 flex-1 items-center gap-2"
@@ -337,7 +329,7 @@ function DashboardLandingContextPanel() {
             <Input
               aria-label="Landing name"
               autoFocus
-              className="h-8 min-w-0 flex-1 text-sm font-semibold"
+              className="h-9 min-w-0 flex-1 text-sm font-semibold"
               disabled={landingContext.isRenaming}
               value={draftName}
               onChange={(event) => setDraftName(event.target.value)}
@@ -351,7 +343,7 @@ function DashboardLandingContextPanel() {
             />
             <Button
               aria-label="Save landing name"
-              className="h-8 w-8"
+              className="h-9 w-9"
               disabled={!draftName.trim() || landingContext.isRenaming}
               size="icon"
               type="submit"
@@ -361,7 +353,7 @@ function DashboardLandingContextPanel() {
             </Button>
             <Button
               aria-label="Cancel landing name edit"
-              className="h-8 w-8"
+              className="h-9 w-9"
               disabled={landingContext.isRenaming}
               onClick={() => {
                 setDraftName(landingContext.name);
@@ -376,38 +368,46 @@ function DashboardLandingContextPanel() {
           </form>
         ) : (
           <>
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 space-y-1">
               <div className="flex min-w-0 items-center gap-2">
-                <p className="truncate text-sm font-semibold text-foreground">
+                <p className="truncate text-base font-semibold text-foreground">
                   {landingContext.name}
                 </p>
+                <Badge
+                  variant="outline"
+                  className="h-6 shrink-0 rounded-full px-2.5 text-[11px]"
+                >
+                  {formatTopbarLandingStatus(landingContext.status)}
+                </Badge>
                 {landingContext.metaError ? (
                   <span className="shrink-0 text-xs font-medium text-destructive">
                     {landingContext.metaError}
                   </span>
                 ) : null}
               </div>
-              <p className="truncate text-[11px] text-muted-foreground">
-                {formatLandingContextMeta(landingContext)}
-              </p>
+              <LandingContextMetaRow context={landingContext} />
             </div>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  aria-label="Edit landing name"
-                  className="h-8 w-8 shrink-0"
-                  onClick={() => {
-                    setDraftName(landingContext.name);
-                    setIsEditing(true);
-                  }}
-                  size="icon"
-                  variant="ghost"
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Edit landing name</TooltipContent>
-            </Tooltip>
+            <div className="flex shrink-0 items-center gap-2 pl-2">
+              <ProjectAssetsButton context={landingContext} />
+              <LandingVariablesPopover context={landingContext} />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    aria-label="Edit landing name"
+                    className="h-9 w-9 shrink-0"
+                    onClick={() => {
+                      setDraftName(landingContext.name);
+                      setIsEditing(true);
+                    }}
+                    size="icon"
+                    variant="ghost"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Edit landing name</TooltipContent>
+              </Tooltip>
+            </div>
           </>
         )}
       </div>
@@ -507,15 +507,112 @@ function UserMenu() {
   );
 }
 
-function formatLandingContextMeta(context: DashboardLandingTopbarContext) {
-  return [
-    context.publicId ? `ID ${context.publicId}` : null,
+function LandingVariablesPopover({
+  context
+}: {
+  context: DashboardLandingTopbarContext;
+}) {
+  const [open, setOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    context.onVariablesOpenChange?.(open);
+  }, [context, open]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-9 rounded-full border-border/70 bg-background/80 px-3 text-sm"
+        >
+          <Braces className="mr-2 h-4 w-4" aria-hidden="true" />
+          Variables
+          <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+            {context.variablesCount ?? 0}
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-[min(26rem,calc(100vw-2rem))] rounded-2xl border-border/80 p-0 shadow-2xl"
+        sideOffset={12}
+      >
+        <div className="border-b px-4 py-3">
+          <p className="text-sm font-semibold text-foreground">Variables</p>
+          <p className="text-xs text-muted-foreground">
+            {context.variablesDescription ?? "Legacy PHP and runtime placeholders"}
+          </p>
+        </div>
+        <div className="px-4 py-3 text-sm text-muted-foreground">
+          Use the Variables control in the editor workspace to review and override
+          imported runtime placeholders.
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function ProjectAssetsButton({ context }: { context: DashboardLandingTopbarContext }) {
+  if (!context.onProjectAssetsOpen) {
+    return null;
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      className="h-9 rounded-full border-border/70 bg-background/80 px-3 text-sm"
+      onClick={context.onProjectAssetsOpen}
+    >
+      <Images className="mr-2 h-4 w-4" aria-hidden="true" />
+      Project assets
+      <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+        {context.projectAssetsCount ?? 0}
+      </span>
+    </Button>
+  );
+}
+
+function LandingContextMetaRow({ context }: { context: DashboardLandingTopbarContext }) {
+  const geoLabel = [
+    context.geoFlagEmoji,
     context.geoName,
-    context.templateName,
-    context.updatedAt ? `Updated ${formatTopbarDate(context.updatedAt)}` : null
+    context.geoCode ? `(${context.geoCode})` : null
   ]
     .filter(Boolean)
-    .join(" / ");
+    .join(" ");
+
+  const items: Array<{ label: string; value: string | null | undefined }> = [
+    { label: "Public ID", value: context.publicId },
+    { label: "Slug", value: context.slug },
+    { label: "Geo", value: geoLabel || null },
+    { label: "Category", value: context.categoryName },
+    { label: "Variant", value: context.variantName },
+    { label: "Template", value: context.templateName },
+    {
+      label: "Updated",
+      value: context.updatedAt ? formatTopbarDate(context.updatedAt) : null
+    }
+  ];
+
+  return (
+    <dl className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
+      {items.map((item) =>
+        item.value ? (
+          <div
+            key={item.label}
+            className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-border/60 bg-background/70 px-2.5 py-1"
+          >
+            <dt className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground/50">
+              {item.label}
+            </dt>
+            <dd className="truncate text-foreground/80">{item.value}</dd>
+          </div>
+        ) : null
+      )}
+    </dl>
+  );
 }
 
 function formatTopbarLandingStatus(status: string) {

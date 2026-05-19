@@ -15,6 +15,8 @@ export type MediaFolder = {
 
 export type MediaAsset = {
   id: string;
+  isMuted: boolean;
+  landingId: string | null;
   originalName: string;
   mimeType: string;
   type: AssetType;
@@ -47,6 +49,8 @@ export type MediaListResponse = {
 
 export type MediaListParams = {
   folderId?: string | null;
+  landingId?: string;
+  muted?: boolean;
   type?: AssetType;
   search?: string;
   page?: number;
@@ -144,12 +148,16 @@ export async function fetchMedia(params: MediaListParams): Promise<MediaListResp
 export async function uploadFiles(
   files: File[],
   folderId?: string | null,
-  onProgress?: (percent: number) => void
+  onProgress?: (percent: number) => void,
+  landingId?: string
 ): Promise<MediaAsset[]> {
   const formData = new FormData();
   files.forEach((file) => formData.append("files", file));
   if (folderId !== undefined && folderId !== null) {
     formData.append("folderId", folderId);
+  }
+  if (landingId) {
+    formData.append("landingId", landingId);
   }
 
   const response = await apiClient.post<MediaAsset[]>("/media/upload", formData, {
@@ -177,7 +185,12 @@ export async function moveAssets(
 
 export async function updateAsset(
   id: string,
-  data: { tags?: string[]; folderId?: string | null }
+  data: {
+    folderId?: string | null;
+    isMuted?: boolean;
+    originalName?: string;
+    tags?: string[];
+  }
 ): Promise<MediaAsset> {
   const response = await apiClient.patch<MediaAsset>(`/media/${id}`, data);
   return response.data;

@@ -395,6 +395,7 @@ model Asset {
   id           String       @id @default(cuid())
   landingId    String?
   uploaderId   String
+  isMuted      Boolean      @default(false)
   type         AssetType
   mimeType     String
   originalName String

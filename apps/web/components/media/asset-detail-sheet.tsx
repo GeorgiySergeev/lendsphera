@@ -2,7 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Copy, Download, ExternalLink, Tag, Trash2, X } from "lucide-react";
+import {
+  Copy,
+  Download,
+  ExternalLink,
+  EyeOff,
+  PencilLine,
+  Tag,
+  Trash2,
+  X
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@workspace/ui/components/badge";
@@ -42,6 +51,7 @@ type AssetDetailSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDeleted: () => void;
+  onUpdated?: (asset: MediaAsset) => void;
 };
 
 const typeLabel: Record<AssetType, string> = {
@@ -66,8 +76,10 @@ export default function AssetDetailSheet({
   asset,
   open,
   onOpenChange,
-  onDeleted
+  onDeleted,
+  onUpdated
 }: AssetDetailSheetProps) {
+  const [draftName, setDraftName] = useState("");
   const [localTags, setLocalTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -80,6 +92,19 @@ export default function AssetDetailSheet({
     },
     onError: () => {
       toast.error("Failed to save tags");
+    }
+  });
+
+  const detailsMutation = useMutation({
+    mutationFn: (payload: { isMuted?: boolean; originalName?: string }) =>
+      updateAsset(asset!.id, payload),
+    onSuccess: (updatedAsset) => {
+      setDraftName(updatedAsset.originalName);
+      onUpdated?.(updatedAsset);
+      toast.success("Asset updated");
+    },
+    onError: () => {
+      toast.error("Failed to update asset");
     }
   });
 
@@ -96,6 +121,7 @@ export default function AssetDetailSheet({
   /* sync local tags when asset changes */
   useEffect(() => {
     if (asset) {
+      setDraftName(asset.originalName);
       setLocalTags(asset.tags);
     }
   }, [asset?.id]);
@@ -281,6 +307,63 @@ export default function AssetDetailSheet({
             </div>
 
             <Separator />
+
+            <div className="space-y-2">
+              <span className="text-sm font-medium">Name</span>
+              <div className="flex gap-2">
+                <Input
+                  value={draftName}
+                  onChange={(event) => setDraftName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      const nextName = draftName.trim();
+                      if (nextName && nextName !== asset.originalName) {
+                        detailsMutation.mutate({ originalName: nextName });
+                      }
+                    }
+                  }}
+                  className="h-9 text-sm"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9 shrink-0"
+                  disabled={
+                    !draftName.trim() ||
+                    draftName.trim() === asset.originalName ||
+                    detailsMutation.isPending
+                  }
+                  onClick={() =>
+                    detailsMutation.mutate({ originalName: draftName.trim() })
+                  }
+                >
+                  <PencilLine className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+
+            {asset.landingId ? (
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <span className="text-sm font-medium">Project asset visibility</span>
+                  <Button
+                    variant={asset.isMuted ? "secondary" : "outline"}
+                    className="w-full justify-start gap-2 text-xs"
+                    disabled={detailsMutation.isPending}
+                    onClick={() => detailsMutation.mutate({ isMuted: !asset.isMuted })}
+                  >
+                    <EyeOff className="h-3.5 w-3.5" />
+                    {asset.isMuted ? "Muted in picker" : "Mute in picker"}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Muted assets stay attached to the landing but are hidden from Studio
+                    `Project assets`.
+                  </p>
+                </div>
+              </>
+            ) : null}
 
             {/* tags */}
             <div className="space-y-2">

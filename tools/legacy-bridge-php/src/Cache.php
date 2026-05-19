@@ -6,7 +6,7 @@ namespace Lendsphera\LegacyBridge;
 
 final class Cache
 {
-    private bool $apcuEnabled;
+    private bool $apcuEnabled; // todo: move to constructor
 
     public function __construct(
         private readonly string $namespace = 'ls_bridge',

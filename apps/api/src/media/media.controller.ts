@@ -103,13 +103,16 @@ export class MediaController {
   uploadAssets(
     @UploadedFiles() files: Express.Multer.File[] | undefined,
     @Body("folderId") folderId: string | undefined,
+    @Body("landingId") landingId: string | undefined,
     @CurrentUser() user: AuthUser
   ) {
     if (!files?.length) {
       throw new BadRequestException("No files provided");
     }
 
-    return Promise.all(files.map((file) => this.media.uploadAsset(file, folderId, user)));
+    return Promise.all(
+      files.map((file) => this.media.uploadAsset(file, folderId, landingId, user))
+    );
   }
 
   @Roles(...READ_ROLES)

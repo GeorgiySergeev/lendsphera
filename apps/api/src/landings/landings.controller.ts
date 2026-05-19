@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -7,9 +8,12 @@ import {
   Patch,
   Post,
   Query,
-  UseGuards
+  UploadedFile,
+  UseGuards,
+  UseInterceptors
 } from "@nestjs/common";
-import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { ApiBearerAuth, ApiConsumes, ApiTags } from "@nestjs/swagger";
 
 import { CurrentUser, type AuthUser } from "../common/current-user.decorator";
 import { JwtAuthGuard } from "../common/jwt-auth.guard";
@@ -27,6 +31,8 @@ import {
   LockLandingDto,
   UpdateLandingDto
 } from "./landings.dto";
+import { CreateLandingFromZipDto } from "../zip-import/zip-import.dto";
+import { ZipImportService } from "../zip-import/zip-import.service";
 import { LandingsService } from "./landings.service";
 
 @ApiTags("Landings")
@@ -36,7 +42,8 @@ import { LandingsService } from "./landings.service";
 export class LandingsController {
   constructor(
     private readonly landings: LandingsService,
-    private readonly landingContext: LandingContextResolver
+    private readonly landingContext: LandingContextResolver,
+    private readonly zipImport: ZipImportService
   ) {}
 
   @Roles(...READ_ROLES)
@@ -75,6 +82,34 @@ export class LandingsController {
     return this.landings.create(dto, user);
   }
 
+  @Roles(...WRITE_ROLES)
+  @Post("from-zip")
+  @ApiConsumes("multipart/form-data")
+  @UseInterceptors(FileInterceptor("file"))
+  createFromZip(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: CreateLandingFromZipDto,
+    @CurrentUser() user: AuthUser
+  ) {
+    if (!file) {
+      throw new BadRequestException("No ZIP file provided.");
+    }
+
+    return this.zipImport.createFromZip(
+      {
+        name: dto.name,
+        slug: dto.slug,
+        geoId: dto.geoId,
+        categoryId: dto.categoryId,
+        variantId: dto.variantId,
+        templateId: dto.templateId,
+        publicId: dto.publicId,
+        file
+      },
+      user
+    );
+  }
+
   @Roles(...READ_ROLES)
   @Get(":id")
   get(@Param("id") id: string) {
@@ -83,8 +118,8 @@ export class LandingsController {
 
   @Roles(...READ_ROLES)
   @Get(":id/editor")
-  editor(@Param("id") id: string) {
-    return this.landings.editor(id);
+  editor(@Param("id") id: string, @CurrentUser() user: AuthUser) {
+    return this.landings.editor(id, user);
   }
 
   @Roles(...READ_ROLES)
@@ -123,6 +158,22 @@ export class LandingsController {
     @CurrentUser() user: AuthUser
   ) {
     return this.landings.duplicate(id, dto, user);
+  }
+
+  @Roles(...WRITE_ROLES)
+  @Post(":id/import-zip")
+  @ApiConsumes("multipart/form-data")
+  @UseInterceptors(FileInterceptor("file"))
+  importZip(
+    @Param("id") id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: AuthUser
+  ) {
+    if (!file) {
+      throw new BadRequestException("No ZIP file provided.");
+    }
+
+    return this.zipImport.replaceDraft({ landingId: id, file }, user);
   }
 
   @Roles(...WRITE_ROLES)

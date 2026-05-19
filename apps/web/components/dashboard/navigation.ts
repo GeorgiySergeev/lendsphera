@@ -38,8 +38,9 @@ const dashboardNavItems: DashboardNavItem[] = [
   { title: "Repository", href: "/dashboard/repository", icon: Database },
   { title: "Media Library", href: "/dashboard/media", icon: Images },
   { title: "Taxonomy", href: "/dashboard/taxonomy", icon: Tags },
-  { title: "Settings", href: "/dashboard/settings", icon: Settings },
-  { title: "Legacy", href: "/landings", icon: MoveUpRight }
+  { title: "Legacy", href: "/landings", icon: MoveUpRight },
+  { title: "Audit", href: "/dashboard/audit", icon: MoveUpRight },
+  { title: "Settings", href: "/dashboard/settings", icon: Settings }
 ];
 
 export { dashboardNavItems };

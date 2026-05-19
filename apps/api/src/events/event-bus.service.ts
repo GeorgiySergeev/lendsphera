@@ -36,9 +36,19 @@ type EventHandler<T extends EventEnvelope> = (payload: T) => Promise<void> | voi
 export class EventBusService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(EventBusService.name);
   private readonly pub = new Redis(env.REDIS_URL);
-  private readonly sub = new Redis(env.REDIS_URL);
+  // Subscriber connections cannot run INFO (ready check) after SUBSCRIBE.
+  private readonly sub = new Redis(env.REDIS_URL, {
+    enableReadyCheck: false,
+    maxRetriesPerRequest: null
+  });
   private readonly channel = "lendsphera.events";
   private handlers = new Map<string, Array<EventHandler<EventEnvelope>>>();
+
+  constructor() {
+    this.sub.on("error", (error) => {
+      this.logger.error("Redis subscriber connection error", error);
+    });
+  }
 
   async onModuleInit() {
     await this.sub.subscribe(this.channel);

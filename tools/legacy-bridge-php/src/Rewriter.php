@@ -23,6 +23,12 @@ final class Rewriter
                 continue;
             }
             $normalized = strtoupper((string) $key);
+            if (str_starts_with($normalized, 'LS_')) {
+                $varReplacements['{{' . $normalized . '}}'] = (string) $value;
+                $varReplacements['{{' . (string) $key . '}}'] = (string) $value;
+                continue;
+            }
+
             $varReplacements['{{LS_' . $normalized . '}}'] = (string) $value;
             $varReplacements['{{LS_' . (string) $key . '}}'] = (string) $value;
         }

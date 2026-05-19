@@ -39,8 +39,10 @@ modified — the bridge is injected transparently at the PHP-FPM level.
    as `fastcgi_param` values.
 3. PHP-FPM's `auto_prepend_file` loads the bridge **before** any legacy code.
 4. The bridge fetches runtime vars (prices, product names, etc.) from the API,
-   caches them in APCu / `/tmp/ls-cache/`, and rewrites `{{LS_*}}` placeholders
-   in the output buffer.
+   caches them in APCu / `/tmp/ls-cache/`, exposes PHP variables such as
+   `$PRODUCT_NAME`, `$PRODUCT_PRICE`, `$LS_PRODUCT_NAME`, and `$LS_RUNTIME_VARS`
+   before `index.php` executes, then rewrites `{{LS_*}}` placeholders in the
+   output buffer.
 5. If the API is down, the bridge serves the last cached values — **no 500**.
 
 ## Files
@@ -83,8 +85,9 @@ output.
 mkdir -p tools/legacy-bridge-php/deploy/docroot/de/urology
 cat > tools/legacy-bridge-php/deploy/docroot/de/urology/index.php << 'PHP'
 <?php
-echo '<h1>{{LS_PRODUCT_NAME}}</h1>';
-echo '<p>Price: {{LS_PRICE}} {{LS_CURRENCY}}</p>';
+echo '<h1>' . $PRODUCT_NAME . '</h1>';
+echo '<p>Price: ' . $PRODUCT_PRICE . ' ' . $CURRENCY . '</p>';
+echo '<p>Mirror: {{LS_PRODUCT_NAME}}</p>';
 echo '<p>Old price: {{LS_OLD_PRICE}}</p>';
 echo '<p>Discount: {{LS_DISCOUNT}}%</p>';
 PHP
@@ -100,10 +103,10 @@ docker compose -f tools/legacy-bridge-php/deploy/docker-compose.legacy.yml up -d
 
 ```bash
 # Should return 200 OK
-curl -sI http://localhost:8080/de/urology/ | grep -q '200 OK'
+curl -sI http://localhost:8082/de/urology/ | grep -q '200 OK'
 
 # Should show API-driven prices (not placeholders)
-curl -s http://localhost:8080/de/urology/ | grep -v '{{LS_'
+curl -s http://localhost:8082/de/urology/ | grep -v '{{LS_'
 ```
 
 ### 5. Verify graceful degradation
@@ -113,7 +116,7 @@ curl -s http://localhost:8080/de/urology/ | grep -v '{{LS_'
 docker stop landing_builder_postgres  # or the API container
 
 # Legacy pages should still work (cached values, no 500)
-curl -sI http://localhost:8080/de/urology/ | grep -q '200 OK'
+curl -sI http://localhost:8082/de/urology/ | grep -q '200 OK'
 ```
 
 ## Environment Variables
@@ -123,7 +126,7 @@ curl -sI http://localhost:8080/de/urology/ | grep -q '200 OK'
 | `LS_API_URL`     | `http://host.docker.internal:4000/api` | Lendsphera API base URL       |
 | `LS_BRIDGE_KEY`  | `dev-ls-bridge-key-change-me`          | Shared secret for bridge auth |
 | `LEGACY_DOCROOT` | `./docroot`                            | Path to legacy PHP app files  |
-| `LEGACY_PORT`    | `8080`                                 | Host port for the nginx proxy |
+| `LEGACY_PORT`    | `8082`                                 | Host port for the nginx proxy |
 
 ## Regenerating the Map
 

@@ -44,7 +44,13 @@ describe("LandingsService publish flow", () => {
       }
     };
 
-    const service = new LandingsService(prisma as never, {} as never, {} as never);
+    const service = new LandingsService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never
+    );
     const user = { email: "admin@example.com", id: "user_admin", role: Role.ADMIN };
 
     await service.create(

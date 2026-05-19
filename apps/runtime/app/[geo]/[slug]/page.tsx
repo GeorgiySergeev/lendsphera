@@ -26,18 +26,30 @@ export default async function RuntimeLandingPage({
   }
 
   const nodes = renderTree(payload.snapshot.specs, payload.renderContext);
+  const hasHtmlSections = payload.snapshot.htmlSections.length > 0;
 
   return (
     <main className="min-h-screen bg-background">
       {payload.needsWidgetRuntimeLoader ? <WidgetRuntimeLoader /> : null}
       <article className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-        {nodes.map((node) => (
-          <section
-            key={node.id}
-            data-widget-kind={node.kind}
-            dangerouslySetInnerHTML={{ __html: node.html }}
-          />
-        ))}
+        {payload.snapshot.cssText ? (
+          <style dangerouslySetInnerHTML={{ __html: payload.snapshot.cssText }} />
+        ) : null}
+        {hasHtmlSections
+          ? payload.snapshot.htmlSections.map((section) => (
+              <section
+                key={section.id}
+                data-section-id={section.id}
+                dangerouslySetInnerHTML={{ __html: section.html }}
+              />
+            ))
+          : nodes.map((node) => (
+              <section
+                key={node.id}
+                data-widget-kind={node.kind}
+                dangerouslySetInnerHTML={{ __html: node.html }}
+              />
+            ))}
       </article>
     </main>
   );

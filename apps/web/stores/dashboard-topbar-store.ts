@@ -1,16 +1,26 @@
 import { create } from "zustand";
 
 type DashboardLandingTopbarContext = {
+  categoryName?: string | null;
+  geoCode?: string | null;
+  geoFlagEmoji?: string | null;
   geoName?: string | null;
   id: string;
   isRenaming?: boolean;
   metaError?: string | null;
   name: string;
+  onProjectAssetsOpen?: () => void;
+  onVariablesOpenChange?: (open: boolean) => void;
   onRename?: (name: string) => Promise<void>;
   publicId?: string | null;
+  slug?: string | null;
   status: string;
   templateName?: string | null;
   updatedAt?: string | null;
+  variantName?: string | null;
+  projectAssetsCount?: number;
+  variablesCount?: number;
+  variablesDescription?: string | null;
 };
 
 type DashboardTopbarState = {

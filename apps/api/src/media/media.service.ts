@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Asset, AssetType, MediaFolder } from "@prisma/client";
+import { Asset, AssetType, MediaFolder, Prisma } from "@prisma/client";
 import type { Response } from "express";
 import sizeOf from "image-size";
 
@@ -61,6 +61,12 @@ export class MediaService {
     return {
       ...asset,
       url: await this.storage.getSignedUrl(asset.s3Key)
+    };
+  }
+
+  private assetAccessWhere(user: AuthUser): Prisma.AssetWhereInput {
+    return {
+      OR: [{ uploaderId: user.id }, { landing: { is: { ownerId: user.id } } }]
     };
   }
 
@@ -232,13 +238,21 @@ export class MediaService {
     items: Asset[];
     meta: { total: number; page: number; limit: number; pageCount: number };
   }> {
-    const where: Record<string, unknown> = {
+    const where: Prisma.AssetWhereInput = {
       deletedAt: null,
-      uploaderId: user.id
+      ...(query.landingId ? this.assetAccessWhere(user) : { uploaderId: user.id })
     };
 
     if (query.folderId !== undefined) {
       where.folderId = query.folderId ?? null;
+    }
+
+    if (query.landingId) {
+      where.landingId = query.landingId;
+    }
+
+    if (query.muted !== undefined) {
+      where.isMuted = query.muted;
     }
 
     if (query.type) {
@@ -276,6 +290,7 @@ export class MediaService {
   async uploadAsset(
     file: Express.Multer.File,
     folderId: string | undefined,
+    landingId: string | undefined,
     user: AuthUser
   ): Promise<Asset> {
     if (folderId) {
@@ -283,6 +298,13 @@ export class MediaService {
         where: { id: folderId, deletedAt: null }
       });
       if (!folder) throw new NotFoundException("Folder not found");
+    }
+
+    if (landingId) {
+      const landing = await this.prisma.landing.findFirst({
+        where: { id: landingId, ownerId: user.id }
+      });
+      if (!landing) throw new NotFoundException("Landing not found");
     }
 
     const assetType = detectAssetType(file.mimetype);
@@ -318,6 +340,7 @@ export class MediaService {
         size: file.size,
         width,
         height,
+        landingId: landingId ?? null,
         uploaderId: user.id,
         folderId: folderId ?? null
       }
@@ -328,7 +351,11 @@ export class MediaService {
 
   async deleteAssets(dto: BulkDeleteAssetsDto, user: AuthUser): Promise<void> {
     const assets = await this.prisma.asset.findMany({
-      where: { id: { in: dto.assetIds }, deletedAt: null, uploaderId: user.id }
+      where: {
+        id: { in: dto.assetIds },
+        deletedAt: null,
+        ...this.assetAccessWhere(user)
+      }
     });
 
     if (assets.length === 0) throw new NotFoundException("Assets not found");
@@ -355,7 +382,7 @@ export class MediaService {
       where: {
         id: { in: dto.assetIds },
         deletedAt: null,
-        uploaderId: user.id
+        ...this.assetAccessWhere(user)
       },
       data: { folderId: dto.folderId ?? null }
     });
@@ -363,7 +390,7 @@ export class MediaService {
 
   async updateAsset(id: string, dto: UpdateAssetDto, user: AuthUser): Promise<Asset> {
     const asset = await this.prisma.asset.findFirst({
-      where: { id, deletedAt: null, uploaderId: user.id }
+      where: { id, deletedAt: null, ...this.assetAccessWhere(user) }
     });
     if (!asset) throw new NotFoundException("Asset not found");
 
@@ -377,6 +404,9 @@ export class MediaService {
     const updated = await this.prisma.asset.update({
       where: { id },
       data: {
+        originalName:
+          dto.originalName !== undefined ? dto.originalName.trim() : undefined,
+        isMuted: dto.isMuted,
         tags: dto.tags !== undefined ? dto.tags : undefined,
         folderId: dto.folderId !== undefined ? (dto.folderId ?? null) : undefined
       }
@@ -387,7 +417,7 @@ export class MediaService {
 
   async getAsset(id: string, user: AuthUser): Promise<Asset> {
     const asset = await this.prisma.asset.findFirst({
-      where: { id, deletedAt: null, uploaderId: user.id }
+      where: { id, deletedAt: null, ...this.assetAccessWhere(user) }
     });
     if (!asset) throw new NotFoundException("Asset not found");
     return this.withSignedUrl(asset);
@@ -400,7 +430,7 @@ export class MediaService {
     download = false
   ): Promise<void> {
     const asset = await this.prisma.asset.findFirst({
-      where: { id, deletedAt: null, uploaderId: user.id }
+      where: { id, deletedAt: null, ...this.assetAccessWhere(user) }
     });
     if (!asset) throw new NotFoundException("Asset not found");
 

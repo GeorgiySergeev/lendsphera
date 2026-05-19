@@ -24,6 +24,8 @@ export class MoveFolderDto extends createZodDto(moveFolderSchema) {}
 
 export const mediaListQuerySchema = z.object({
   folderId: z.string().cuid().optional(),
+  landingId: z.string().cuid().optional(),
+  muted: z.coerce.boolean().optional(),
   type: z.nativeEnum(AssetType).optional(),
   search: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),
@@ -45,6 +47,8 @@ export const bulkDeleteAssetsSchema = z.object({
 export class BulkDeleteAssetsDto extends createZodDto(bulkDeleteAssetsSchema) {}
 
 export const updateAssetSchema = z.object({
+  originalName: z.string().min(1).max(255).optional(),
+  isMuted: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
   folderId: z.string().cuid().nullable().optional()
 });
