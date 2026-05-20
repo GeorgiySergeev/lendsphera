@@ -47,6 +47,7 @@ import { useDashboardTopbarStore } from "../../stores/dashboard-topbar-store";
 import { LandingImportedVariablesPanel } from "./landing-imported-variables-panel";
 import { LandingProjectAssetsDialog } from "./landing-project-assets-dialog";
 import { PreviewPane } from "./preview-pane";
+import { ExportDialog } from "./export-dialog";
 
 type LandingStudioShellProps = {
   landingId: string;
@@ -68,6 +69,136 @@ type StudioAsset = {
   src: string;
   type?: string;
 };
+
+type LandingLockStatus = "acquiring" | "locked" | "lost" | "error" | null;
+
+type LandingEditorBootstrapPayload = {
+  doc: LandingEditorDocument;
+  projectAssetsResponse: {
+    items: MediaAsset[];
+  };
+};
+
+type LandingLockRuntime = {
+  acquirePromise: Promise<void> | null;
+  heartbeatInterval: ReturnType<typeof setInterval> | null;
+  releaseTimeout: ReturnType<typeof setTimeout> | null;
+  status: LandingLockStatus;
+};
+
+const EDITOR_REQUEST_CACHE_TTL_MS = 30_000;
+
+const landingMetaRequests = new Map<string, Promise<LandingDetail>>();
+const landingMetaResults = new Map<string, { expiresAt: number; value: LandingDetail }>();
+const landingEditorBootstrapRequests = new Map<
+  string,
+  Promise<LandingEditorBootstrapPayload>
+>();
+const landingEditorBootstrapResults = new Map<
+  string,
+  { expiresAt: number; value: LandingEditorBootstrapPayload }
+>();
+const landingLockRuntimes = new Map<string, LandingLockRuntime>();
+
+function readCachedResult<T>(
+  cache: Map<string, { expiresAt: number; value: T }>,
+  key: string
+): T | null {
+  const cached = cache.get(key);
+  if (!cached) {
+    return null;
+  }
+
+  if (cached.expiresAt <= Date.now()) {
+    cache.delete(key);
+    return null;
+  }
+
+  return cached.value;
+}
+
+function writeCachedResult<T>(
+  cache: Map<string, { expiresAt: number; value: T }>,
+  key: string,
+  value: T
+) {
+  cache.set(key, {
+    expiresAt: Date.now() + EDITOR_REQUEST_CACHE_TTL_MS,
+    value
+  });
+}
+
+function reuseInflightRequest<T>(
+  cache: Map<string, Promise<T>>,
+  key: string,
+  factory: () => Promise<T>
+): Promise<T> {
+  const existing = cache.get(key);
+  if (existing) {
+    return existing;
+  }
+
+  const request = factory().finally(() => {
+    cache.delete(key);
+  });
+
+  cache.set(key, request);
+  return request;
+}
+
+function loadLandingMetaCached(landingId: string) {
+  const cached = readCachedResult(landingMetaResults, landingId);
+  if (cached) {
+    return Promise.resolve(cached);
+  }
+
+  return reuseInflightRequest(landingMetaRequests, landingId, async () => {
+    const value = await fetchLanding(landingId);
+    writeCachedResult(landingMetaResults, landingId, value);
+    return value;
+  });
+}
+
+function loadLandingEditorBootstrap(landingId: string) {
+  const cached = readCachedResult(landingEditorBootstrapResults, landingId);
+  if (cached) {
+    return Promise.resolve(cached);
+  }
+
+  return reuseInflightRequest(landingEditorBootstrapRequests, landingId, async () => {
+    const [doc, projectAssetsResponse] = await Promise.all([
+      fetchLandingEditorDocument(landingId),
+      fetchMedia({
+        landingId,
+        limit: 100,
+        page: 1,
+        sortBy: "createdAt",
+        sortOrder: "desc"
+      }).catch(() => ({ items: [] as MediaAsset[] }))
+    ]);
+
+    const value = { doc, projectAssetsResponse };
+    writeCachedResult(landingEditorBootstrapResults, landingId, value);
+    return value;
+  });
+}
+
+function getLandingLockRuntime(landingId: string): LandingLockRuntime {
+  const existing = landingLockRuntimes.get(landingId);
+  if (existing) {
+    return existing;
+  }
+
+  const runtime: LandingLockRuntime = {
+    acquirePromise: null,
+    heartbeatInterval: null,
+    releaseTimeout: null,
+    status: null
+  };
+
+  landingLockRuntimes.set(landingId, runtime);
+  return runtime;
+}
 
 const defaultLandingMarkup =
   '<main><section style="max-width:960px;margin:0 auto;padding:80px 24px;text-align:center"><p style="font-size:12px;font-weight:700;letter-spacing:.3em;text-transform:uppercase;color:#2563eb">Landing Builder</p><h1 style="margin-top:16px;font-size:56px;line-height:1;font-weight:700;color:#020617">Edit your landing page</h1><p style="max-width:640px;margin:24px auto 0;font-size:18px;line-height:1.6;color:#475569">Build landing pages with the Studio editor and save drafts back into the existing landsphera workflow.</p><a href="#" style="display:inline-flex;margin-top:32px;padding:12px 24px;border-radius:9999px;background:#2563eb;color:#fff;text-decoration:none;font-weight:600">Primary action</a></section></main>';
@@ -133,12 +264,11 @@ const templatesPanelLayout = {
 
 function LandingStudioShell({ landingId }: LandingStudioShellProps) {
   const editorRef = React.useRef<any>(null);
+  const importedLandingStylesRef = React.useRef<string | null>(null);
   const projectAssetInventoryRef = React.useRef<StudioAsset[]>([]);
   const studioRootRef = React.useRef<HTMLDivElement | null>(null);
   const studioInitRef = React.useRef(false);
-  const lockStatusRef = React.useRef<"acquiring" | "locked" | "lost" | "error" | null>(
-    null
-  );
+  const lockStatusRef = React.useRef<LandingLockStatus>(null);
   const [isReady, setIsReady] = React.useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = React.useState(false);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
@@ -155,6 +285,7 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
   const [landingMetaError, setLandingMetaError] = React.useState<string | null>(null);
   const [isNameSaving, setIsNameSaving] = React.useState(false);
   const [isProjectAssetsDialogOpen, setIsProjectAssetsDialogOpen] = React.useState(false);
+  const [isExportOpen, setIsExportOpen] = React.useState(false);
   const [isVariablesPanelOpen, setIsVariablesPanelOpen] = React.useState(true);
   const placeholderValuesRef = React.useRef<PlaceholderValue>({});
   const landingVariablesRef = React.useRef<LandingImportedVariable[]>([]);
@@ -183,7 +314,7 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
     async function loadLandingMeta() {
       try {
         setLandingMetaError(null);
-        const result = await fetchLanding(landingId);
+        const result = await loadLandingMetaCached(landingId);
         if (cancelled) {
           return;
         }
@@ -283,54 +414,94 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
   ]);
 
   React.useEffect(() => {
-    void refreshLandingProjectAssets();
-  }, [refreshLandingProjectAssets]);
+    const runtime = getLandingLockRuntime(landingId);
+    if (runtime.releaseTimeout) {
+      clearTimeout(runtime.releaseTimeout);
+      runtime.releaseTimeout = null;
+    }
 
-  React.useEffect(() => {
-    let heartbeatInterval: NodeJS.Timeout | null = null;
+    const syncLockStatus = (status: LandingLockStatus) => {
+      runtime.status = status;
+      lockStatusRef.current = status;
+    };
 
     async function acquireLock() {
-      try {
-        lockStatusRef.current = "acquiring";
-        await acquireLandingLock(landingId, 2);
-        lockStatusRef.current = "locked";
-        toast.success("Editor locked", "You have exclusive edit access");
+      if (runtime.status === "locked" || runtime.status === "acquiring") {
+        lockStatusRef.current = runtime.status;
+        return;
+      }
 
-        heartbeatInterval = setInterval(async () => {
-          try {
-            await refreshLandingLock(landingId);
-          } catch {
-            lockStatusRef.current = "lost";
-            toast.error("Lock lost", "Another user may have taken control");
-            if (heartbeatInterval) {
-              clearInterval(heartbeatInterval);
-            }
+      if (runtime.acquirePromise) {
+        await runtime.acquirePromise.catch(() => undefined);
+        lockStatusRef.current = runtime.status;
+        return;
+      }
+
+      runtime.acquirePromise = (async () => {
+        syncLockStatus("acquiring");
+
+        try {
+          await acquireLandingLock(landingId, 2);
+          syncLockStatus("locked");
+          toast.success("Editor locked", "You have exclusive edit access");
+
+          if (!runtime.heartbeatInterval) {
+            runtime.heartbeatInterval = setInterval(async () => {
+              try {
+                await refreshLandingLock(landingId);
+              } catch {
+                syncLockStatus("lost");
+                toast.error("Lock lost", "Another user may have taken control");
+                if (runtime.heartbeatInterval) {
+                  clearInterval(runtime.heartbeatInterval);
+                  runtime.heartbeatInterval = null;
+                }
+              }
+            }, 30000);
           }
-        }, 30000);
+        } catch {
+          syncLockStatus("error");
+          toast.error("Could not acquire lock", "Another user may be editing");
+        } finally {
+          runtime.acquirePromise = null;
+        }
+      })();
+
+      try {
+        await runtime.acquirePromise;
       } catch {
-        lockStatusRef.current = "error";
-        toast.error("Could not acquire lock", "Another user may be editing");
+        return;
       }
     }
 
     void acquireLock();
 
     const handleBeforeUnload = () => {
-      if (lockStatusRef.current === "locked") {
-        void releaseLandingLock(landingId);
+      if (runtime.status === "locked") {
+        void releaseLandingLock(landingId).catch(() => undefined);
       }
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
-      if (heartbeatInterval) {
-        clearInterval(heartbeatInterval);
-      }
       window.removeEventListener("beforeunload", handleBeforeUnload);
-      if (lockStatusRef.current === "locked") {
-        void releaseLandingLock(landingId);
-      }
+      runtime.releaseTimeout = setTimeout(() => {
+        if (runtime.heartbeatInterval) {
+          clearInterval(runtime.heartbeatInterval);
+          runtime.heartbeatInterval = null;
+        }
+
+        const shouldRelease = runtime.status === "locked";
+        runtime.acquirePromise = null;
+        runtime.releaseTimeout = null;
+        runtime.status = null;
+        landingLockRuntimes.delete(landingId);
+
+        if (shouldRelease) {
+          void releaseLandingLock(landingId);
+        }
+      }, 150);
     };
   }, [landingId]);
 
@@ -381,24 +552,24 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
       },
       assets: {
         storageType: "self",
-        providerId: "dashboard-media-library",
+        providerId: "media-library",
         providers: [
           {
-            id: "landing-project-assets",
-            label: "Project assets",
+            id: "site-media",
+            label: "Site media",
             types: "image",
             onLoad: async () => projectAssetInventoryRef.current
           },
           {
-            id: "dashboard-media-library",
-            label: "Dashboard media",
+            id: "media-library",
+            label: "Media library",
             types: "image",
             onLoad: async () => {
               const assets = await loadStudioAssets();
               if (!assets.length) {
                 toast.error(
                   "Media library is empty for this session",
-                  "No readable image assets were returned by /media or /assets."
+                  "No readable image assets were returned."
                 );
               }
               return assets;
@@ -534,6 +705,13 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
                       onClick: () => {
                         void openRuntimePreview();
                       }
+                    },
+                    {
+                      id: "export-zip",
+                      label: "Export",
+                      onClick: () => {
+                        setIsExportOpen(true);
+                      }
                     }
                   ]
                 }
@@ -579,6 +757,7 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
       project: {
         type: "web",
         default: ensureStudioProjectShape({
+          custom: { id: `landing-${landingId}` },
           pages: [{ name: "Home", component: defaultLandingMarkup }]
         })
       },
@@ -596,23 +775,20 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
         onLoad: async () => {
           try {
             setLoadError(null);
-            const [doc, projectAssetsResponse] = await Promise.all([
-              fetchLandingEditorDocument(landingId),
-              fetchMedia({
-                landingId,
-                limit: 100,
-                page: 1,
-                sortBy: "createdAt",
-                sortOrder: "desc"
-              }).catch(() => ({ items: [] as MediaAsset[] }))
-            ]);
+            const { doc, projectAssetsResponse } =
+              await loadLandingEditorBootstrap(landingId);
             const project = toStudioProject(doc, landingId);
+            const resolvedStyles = resolveImportedLandingStyles(doc, project);
             const visibleProjectAssets = normalizeStudioAssets(
               projectAssetsResponse.items.filter((asset) => !asset.isMuted)
             );
-            const projectWithLandingAssets = mergeProjectAssetsIntoStudioProject(
-              project,
-              visibleProjectAssets
+            const projectWithLandingAssets = ensureStylesOnStudioProject(
+              mergeProjectAssetsIntoStudioProject(project, visibleProjectAssets),
+              resolvedStyles
+            );
+            importedLandingStylesRef.current = resolveImportedLandingStyles(
+              doc,
+              projectWithLandingAssets
             );
             projectAssetInventoryRef.current = normalizeStudioAssets(
               extractAssets(projectWithLandingAssets)
@@ -633,8 +809,18 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
             setLandingProjectAssets(projectAssetsResponse.items);
             setLandingVariables(nextVariables);
             setPlaceholderValues(nextPlaceholderValues);
+            const loadedProject = ensureStudioProjectShape(projectWithLandingAssets);
+            queueMicrotask(() => {
+              const editor = editorRef.current;
+              if (editor) {
+                applyImportedLandingEditorStyles(
+                  editor,
+                  importedLandingStylesRef.current
+                );
+              }
+            });
             return {
-              project: ensureStudioProjectShape(projectWithLandingAssets)
+              project: loadedProject
             };
           } catch {
             setLandingProjectAssets([]);
@@ -649,18 +835,9 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
           }
         }
       },
-      plugins: [
-        tableComponent.init({}),
-        listPagesComponent.init({}),
-        accordionComponent.init({}),
-        flexComponent.init({}),
-        layoutSidebarButtons.init({}),
-        fsLightboxComponent.init({}),
-        lightGalleryComponent.init({}),
-        swiperComponent.init({}),
-        rteTinyMce.init({}),
-        canvasEmptyState.init({}),
-        createStudioComponentsBlocksPlugin()
+      plugins: ({ plugins: sdkPlugins }: { plugins: unknown[] }) => [
+        ...sanitizeStudioPlugins(sdkPlugins),
+        ...STUDIO_EDITOR_PLUGINS
       ]
     }),
     [landingId]
@@ -741,6 +918,8 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
       studioInitRef.current = true;
       setIsReady(false);
 
+      await repairStudioIndexedDbPlugins();
+
       const { createStudioEditor } = await import("@grapesjs/studio-sdk");
       await createStudioEditor({
         ...(studioOptions as any),
@@ -753,7 +932,10 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
             return;
           }
           editorRef.current = editor;
-          applyImportedLandingEditorStyles(editor);
+          registerImportedLandingEditorStyleSync(
+            editor,
+            () => importedLandingStylesRef.current
+          );
           syncProjectAssetsInEditor(
             editor,
             normalizeStudioAssets(landingProjectAssets.filter((asset) => !asset.isMuted))
@@ -783,7 +965,7 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
       setLandingVariables([]);
       setPlaceholderValues({});
     };
-  }, [landingProjectAssets, studioOptions]);
+  }, [studioOptions]);
 
   if (loadError && !isReady) {
     return (
@@ -801,7 +983,7 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
   return (
     <div className="relative h-[calc(100dvh)]">
       <div className="h-full overflow-hidden  border bg-background shadow-sm">
-        <div ref={studioRootRef} className="h-full w-full" />
+        <div ref={studioRootRef} className="h-full w-full" data-studio-root="true" />
       </div>
       {isVariablesPanelOpen ? (
         <div
@@ -855,6 +1037,28 @@ function LandingStudioShell({ landingId }: LandingStudioShellProps) {
         onAssetsChanged={refreshLandingProjectAssets}
         onOpenChange={setIsProjectAssetsDialogOpen}
       />
+
+      <ExportDialog
+        getHtml={React.useCallback(() => {
+          const editor = editorRef.current;
+          if (typeof editor?.getHtml === "function") {
+            const html = editor.getHtml();
+            return typeof html === "string" ? html : "";
+          }
+          return "";
+        }, [])}
+        getCss={React.useCallback(() => {
+          const editor = editorRef.current;
+          if (typeof editor?.getCss === "function") {
+            const css = editor.getCss();
+            return typeof css === "string" ? css : "";
+          }
+          return "";
+        }, [])}
+        name={landing?.name}
+        isOpen={isExportOpen}
+        onOpenChange={setIsExportOpen}
+      />
     </div>
   );
 }
@@ -881,20 +1085,199 @@ function toDraftPayload(
   };
 }
 
-function applyImportedLandingEditorStyles(editor: any) {
+function extractFirstPageStyles(project: unknown): string {
+  if (!project || typeof project !== "object") {
+    return "";
+  }
+
+  const styles = (project as { pages?: Array<{ styles?: unknown }> }).pages?.[0]?.styles;
+  return typeof styles === "string" ? styles : "";
+}
+
+function resolveImportedLandingStyles(
+  doc: LandingEditorDocument,
+  project: unknown
+): string | null {
+  const fromDoc =
+    typeof doc.styles === "string" && doc.styles.trim()
+      ? doc.styles.trim()
+      : [doc.css, doc.customCss].filter(Boolean).join("\n").trim();
+  const fromProject = extractFirstPageStyles(project).trim();
+  const resolved = fromDoc || fromProject;
+
+  return resolved || null;
+}
+
+function extractStylesheetUrlsFromCss(css: string): string[] {
+  const urls = new Set<string>();
+
+  for (const match of css.matchAll(/@import\s+url\(["']?([^"')]+)["']?\)/gi)) {
+    const href = match[1]?.trim();
+    if (href) {
+      urls.add(href);
+    }
+  }
+
+  return [...urls];
+}
+
+function injectImportedLandingStylesIntoCanvas(editor: any, styles: string) {
+  const stylesheetUrls = extractStylesheetUrlsFromCss(styles);
+  const inlineStyles = styles.replace(/@import\s+url\([^)]+\)\s*;?/gi, "").trim();
+
+  getStudioCanvasDocuments(editor).forEach((iframeDoc) => {
+    if (!iframeDoc.head) {
+      return;
+    }
+
+    if (inlineStyles) {
+      let styleEl = iframeDoc.querySelector<HTMLStyleElement>(
+        'style[data-landsphera-imported="true"]'
+      );
+      if (!styleEl) {
+        styleEl = iframeDoc.createElement("style");
+        styleEl.dataset.landspheraImported = "true";
+        iframeDoc.head.appendChild(styleEl);
+      }
+
+      styleEl.textContent = inlineStyles;
+    }
+
+    stylesheetUrls.forEach((href) => {
+      const alreadyLinked = Array.from(
+        iframeDoc.querySelectorAll<HTMLLinkElement>(
+          "link[data-landsphera-imported-stylesheet]"
+        )
+      ).some((link) => link.getAttribute("href") === href);
+      if (alreadyLinked) {
+        return;
+      }
+
+      const linkEl = iframeDoc.createElement("link");
+      linkEl.rel = "stylesheet";
+      linkEl.href = href;
+      linkEl.dataset.landspheraImportedStylesheet = href;
+      iframeDoc.head.appendChild(linkEl);
+    });
+  });
+}
+
+function ensureStylesOnStudioProject(project: unknown, styles: string | null): unknown {
+  if (!styles?.trim() || !isStudioProject(project)) {
+    return project;
+  }
+
+  const studioProject = project as { pages?: Array<Record<string, unknown>> };
+  const firstPage = studioProject.pages?.[0];
+  if (!firstPage) {
+    return project;
+  }
+
+  return {
+    ...studioProject,
+    pages: [{ ...firstPage, styles }, ...(studioProject.pages?.slice(1) ?? [])]
+  };
+}
+
+function applyImportedLandingEditorStyles(editor: any, fallbackStyles?: string | null) {
   const project =
     typeof editor?.getProjectData === "function" ? editor.getProjectData() : null;
-  const styles = (project as { pages?: Array<{ styles?: string }> })?.pages?.[0]?.styles;
+  const styles = (extractFirstPageStyles(project) || fallbackStyles || "").trim();
 
-  if (typeof styles !== "string" || !styles.trim()) {
+  if (!styles) {
     return;
   }
 
-  if (typeof editor?.Css?.addRules === "function") {
-    editor.Css.addRules(styles);
-  } else if (typeof editor?.setStyle === "function") {
-    editor.setStyle(styles);
+  if (editor.__landspheraImportedStylesFingerprint === styles) {
+    injectImportedLandingStylesIntoCanvas(editor, styles);
+    return;
   }
+
+  editor.__landspheraImportedStylesFingerprint = styles;
+
+  if (typeof editor?.setStyle === "function") {
+    editor.setStyle(styles);
+  } else if (typeof editor?.Css?.addRules === "function") {
+    editor.Css.addRules(styles);
+  }
+
+  injectImportedLandingStylesIntoCanvas(editor, styles);
+}
+
+function registerImportedLandingEditorStyleSync(
+  editor: any,
+  readFallbackStyles: () => string | null
+) {
+  const apply = () => {
+    applyImportedLandingEditorStyles(editor, readFallbackStyles());
+    syncImportedStylesheetsFromComponentMarkup(editor);
+  };
+
+  apply();
+
+  const events = ["load", "project:load", "storage:load", "storage:end:load"];
+  events.forEach((eventName) => {
+    if (typeof editor?.on === "function") {
+      editor.on(eventName, apply);
+    }
+  });
+
+  if (typeof editor?.on === "function") {
+    editor.on("canvas:frame:load", () => {
+      apply();
+      ensureStudioTailwindCanvas(editor);
+    });
+  }
+
+  for (const delayMs of [0, 100, 400, 1200, 2500]) {
+    window.setTimeout(apply, delayMs);
+  }
+}
+
+function syncImportedStylesheetsFromComponentMarkup(editor: any) {
+  const project =
+    typeof editor?.getProjectData === "function" ? editor.getProjectData() : null;
+  const markup = extractFirstPageHtml(project);
+  if (!markup.trim()) {
+    return;
+  }
+
+  const hrefs = new Set<string>();
+  const linkPattern = /<link\b[^>]*\brel=["']stylesheet["'][^>]*>/gi;
+  for (const tag of markup.match(linkPattern) ?? []) {
+    const hrefMatch = tag.match(/\bhref=["']([^"']+)["']/i);
+    const href = hrefMatch?.[1]?.trim();
+    if (href) {
+      hrefs.add(href);
+    }
+  }
+
+  if (!hrefs.size) {
+    return;
+  }
+
+  getStudioCanvasDocuments(editor).forEach((iframeDoc) => {
+    if (!iframeDoc.head) {
+      return;
+    }
+
+    hrefs.forEach((href) => {
+      const alreadyLinked = Array.from(
+        iframeDoc.querySelectorAll<HTMLLinkElement>(
+          "link[data-landsphera-imported-stylesheet]"
+        )
+      ).some((link) => link.getAttribute("href") === href);
+      if (alreadyLinked) {
+        return;
+      }
+
+      const linkEl = iframeDoc.createElement("link");
+      linkEl.rel = "stylesheet";
+      linkEl.href = href;
+      linkEl.dataset.landspheraImportedStylesheet = href;
+      iframeDoc.head.appendChild(linkEl);
+    });
+  });
 }
 
 function toStudioProject(doc: LandingEditorDocument, landingId: string) {
@@ -907,12 +1290,13 @@ function toStudioProject(doc: LandingEditorDocument, landingId: string) {
   if (isStudioProject(maybeProject)) {
     const studioProject = maybeProject as { pages?: Array<Record<string, unknown>> };
     const firstPage = studioProject.pages?.[0];
+    const resolvedStyles = resolveImportedLandingStyles(doc, maybeProject);
 
-    if (firstPage && typeof doc.styles === "string" && doc.styles.trim()) {
+    if (firstPage && resolvedStyles) {
       project = {
         ...studioProject,
         pages: [
-          { ...firstPage, styles: doc.styles },
+          { ...firstPage, styles: resolvedStyles },
           ...(studioProject.pages?.slice(1) ?? [])
         ]
       };
@@ -968,6 +1352,167 @@ function refreshEditorAssetUrlsInValue(
   return input;
 }
 
+function isInvalidAssetUrl(value: string) {
+  const trimmed = value.trim();
+  return !trimmed || trimmed === "undefined" || trimmed === "null";
+}
+
+function isRewritableRelativeAssetPath(value: string) {
+  if (isInvalidAssetUrl(value)) {
+    return false;
+  }
+
+  return !/^(?:https?:|\/|data:|#|javascript:|mailto:|tel:)/i.test(value.trim());
+}
+
+function isStudioPluginObject(plugin: unknown): plugin is Record<string, unknown> {
+  return Boolean(plugin && typeof plugin === "object" && !Array.isArray(plugin));
+}
+
+function resolvePluginId(plugin: { id?: unknown }) {
+  if (typeof plugin.id === "string") {
+    return plugin.id.trim();
+  }
+
+  if (plugin.id != null && typeof plugin.id !== "object") {
+    return String(plugin.id).trim();
+  }
+
+  return "";
+}
+
+function isValidPluginName(value: string) {
+  return value.length > 0 && !isInvalidAssetUrl(value);
+}
+
+async function repairStudioIndexedDbPlugins() {
+  if (typeof indexedDB === "undefined") {
+    return;
+  }
+
+  await new Promise<void>((resolve) => {
+    const request = indexedDB.open("gjs-studio", 1);
+
+    request.onerror = () => resolve();
+    request.onsuccess = () => {
+      const db = request.result;
+
+      try {
+        const transaction = db.transaction("settings", "readwrite");
+        const store = transaction.objectStore("settings");
+        const getRequest = store.get("plugins");
+
+        getRequest.onerror = () => resolve();
+        getRequest.onsuccess = () => {
+          const storedPlugins = getRequest.result;
+
+          if (!Array.isArray(storedPlugins)) {
+            resolve();
+            return;
+          }
+
+          const sanitizedPlugins = sanitizeStudioPlugins(storedPlugins);
+
+          if (sanitizedPlugins.length !== storedPlugins.length) {
+            store.put(sanitizedPlugins, "plugins");
+          }
+
+          resolve();
+        };
+      } catch {
+        resolve();
+      }
+    };
+  });
+}
+
+function sanitizeStudioPlugins(plugins: unknown[]) {
+  return plugins.filter((plugin) => {
+    if (plugin === false || plugin == null) {
+      return false;
+    }
+
+    if (typeof plugin === "function") {
+      return true;
+    }
+
+    if (typeof plugin === "string") {
+      return isValidPluginName(plugin);
+    }
+
+    if (!isStudioPluginObject(plugin)) {
+      return false;
+    }
+
+    const pluginObj = plugin as Record<string, unknown>;
+    const id = resolvePluginId(pluginObj);
+    const hasSrc = "src" in pluginObj;
+    const src = typeof pluginObj.src === "string" ? pluginObj.src.trim() : "";
+    const hasInit = typeof pluginObj.init === "function";
+
+    if (hasInit) {
+      return true;
+    }
+
+    if (hasSrc) {
+      if (!isValidPluginName(id)) {
+        return false;
+      }
+      return src.length > 0 && !isInvalidAssetUrl(src);
+    }
+
+    return false;
+  });
+}
+
+function sanitizeBrokenAssetReferencesInText(text: string) {
+  return text.replace(/\b(src|href|poster)=["'](?:undefined|null)["']/gi, '$1=""');
+}
+
+function sanitizeBrokenAssetReferences(input: unknown): unknown {
+  if (typeof input === "string") {
+    return sanitizeBrokenAssetReferencesInText(input);
+  }
+
+  if (Array.isArray(input)) {
+    return input.map((item) => sanitizeBrokenAssetReferences(item));
+  }
+
+  if (input && typeof input === "object") {
+    const record = input as Record<string, unknown>;
+
+    if (typeof record.src === "string" && isInvalidAssetUrl(record.src)) {
+      const rest = { ...record };
+      delete rest.src;
+      return sanitizeBrokenAssetReferences(rest);
+    }
+
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(record)) {
+      if (key === "plugins" && Array.isArray(value)) {
+        result[key] = sanitizeStudioPlugins(value);
+        continue;
+      }
+
+      result[key] = sanitizeBrokenAssetReferences(value);
+    }
+    return result;
+  }
+
+  return input;
+}
+
+function buildEditorAssetProxyPath(landingId: string, assetPath: string, token: string) {
+  const normalizedPath = assetPath
+    .split(/[?#]/)[0]!
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
+  return `/api/landings/${encodeURIComponent(landingId)}/assets/${normalizedPath}?token=${encodeURIComponent(token)}`;
+}
+
 function refreshEditorAssetUrlsInText(landingId: string, text: string, token: string) {
   const tokenParam = `token=${encodeURIComponent(token)}`;
   const withRelativeProxyUrls = text.replace(
@@ -987,7 +1532,34 @@ function refreshEditorAssetUrlsInText(landingId: string, text: string, token: st
     "g"
   );
 
-  return withRelativeProxyUrls.replace(proxyPattern, `$1?${tokenParam}`);
+  let result = withRelativeProxyUrls.replace(proxyPattern, `$1?${tokenParam}`);
+
+  const attrPattern = /\b(src|href|poster)=["']([^"']+)["']/gi;
+  result = result.replace(attrPattern, (full, attrName: string, rawValue: string) => {
+    if (!isRewritableRelativeAssetPath(rawValue)) {
+      if (isInvalidAssetUrl(rawValue)) {
+        return `${attrName}=""`;
+      }
+      return full;
+    }
+
+    const resolved = buildEditorAssetProxyPath(landingId, rawValue, token);
+    return `${attrName}="${resolved}"`;
+  });
+
+  result = result.replace(
+    /url\((["']?)([^"')]+)\1\)/gi,
+    (full, _quote, rawValue: string) => {
+      if (!isRewritableRelativeAssetPath(rawValue)) {
+        return full;
+      }
+
+      const resolved = buildEditorAssetProxyPath(landingId, rawValue, token);
+      return `url("${resolved}")`;
+    }
+  );
+
+  return result;
 }
 
 function isStudioProject(value: unknown): value is { pages: unknown[] } {
@@ -1090,22 +1662,34 @@ function ensureStudioProjectShape(project: unknown) {
           }
         ];
 
+    const pageName =
+      typeof pageRecord.name === "string" && pageRecord.name.trim()
+        ? pageRecord.name.trim()
+        : `Page ${index + 1}`;
+    const pageId =
+      typeof pageRecord.id === "string" &&
+      pageRecord.id.trim() &&
+      pageRecord.id.trim() !== "undefined"
+        ? pageRecord.id.trim()
+        : pageName
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "") || `page-${index + 1}`;
+
     return {
       ...pageRecord,
-      name:
-        typeof pageRecord.name === "string" && pageRecord.name.trim()
-          ? pageRecord.name
-          : `Page ${index + 1}`,
+      id: pageId,
+      name: pageName,
       ...(hasLegacyComponent ? { component: pageRecord.component } : {}),
       frames
     };
   });
 
-  return {
+  return sanitizeBrokenAssetReferences({
     ...source,
     assets: Array.isArray(source.assets) ? source.assets : [],
     pages
-  };
+  });
 }
 
 export { LandingStudioShell };
@@ -1121,9 +1705,6 @@ const studioLibraryBlockPrefix = "library-component:";
 const studioTailwindScriptUrl = "https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4";
 const studioComponentCssCache = new Map<string, string>();
 const studioComponentDetailRequests = new Map<string, Promise<string>>();
-let studioSharedAssetsPromise: Promise<StudioAsset[]> | null = null;
-let studioSharedAssetsCache: StudioAsset[] | null = null;
-
 function createStudioComponentsBlocksPlugin() {
   return (editor: any) => {
     void registerStudioComponentBlocks(editor);
@@ -1149,16 +1730,58 @@ function createStudioComponentsBlocksPlugin() {
   };
 }
 
+function buildStudioPlugin(
+  plugin: any,
+  pluginName: string,
+  options: Record<string, unknown>
+) {
+  if (!plugin || typeof plugin.init !== "function") {
+    console.warn(`Studio plugin "${pluginName}" is unavailable; skipping.`);
+    return null;
+  }
+
+  return plugin.init(options);
+}
+
+const STUDIO_EDITOR_PLUGINS = [
+  buildStudioPlugin(tableComponent, "tableComponent", {}),
+  buildStudioPlugin(listPagesComponent, "listPagesComponent", {}),
+  buildStudioPlugin(accordionComponent, "accordionComponent", {}),
+  buildStudioPlugin(flexComponent, "flexComponent", {}),
+  buildStudioPlugin(layoutSidebarButtons, "layoutSidebarButtons", {}),
+  buildStudioPlugin(fsLightboxComponent, "fsLightboxComponent", {}),
+  buildStudioPlugin(lightGalleryComponent, "lightGalleryComponent", {}),
+  buildStudioPlugin(swiperComponent, "swiperComponent", {}),
+  buildStudioPlugin(rteTinyMce, "rteTinyMce", {}),
+  buildStudioPlugin(canvasEmptyState, "canvasEmptyState", {}),
+  createStudioComponentsBlocksPlugin()
+].filter(Boolean);
+
 async function registerStudioComponentBlocks(editor: any) {
   try {
     const items = await loadStudioComponentBlocks();
+    const blockManager =
+      editor?.Blocks ??
+      editor?.BlockManager ??
+      (typeof editor?.getModel === "function"
+        ? (editor.getModel()?.Blocks ?? editor.getModel()?.BlockManager)
+        : null);
+
+    if (
+      !blockManager ||
+      typeof blockManager.add !== "function" ||
+      typeof blockManager.get !== "function"
+    ) {
+      console.warn("Studio block manager is unavailable; skipping component blocks.");
+      return;
+    }
 
     items.forEach((item, index) => {
-      if (editor.Blocks.get(item.id)) {
+      if (blockManager.get(item.id)) {
         return;
       }
 
-      editor.Blocks.add(
+      blockManager.add(
         item.id,
         {
           label: formatStudioComponentBlockLabel(item.name),
@@ -1211,6 +1834,11 @@ function getStudioBlockId(block: any) {
 function ensureStudioTailwindCanvas(editor: any) {
   const iframeDocs = getStudioCanvasDocuments(editor);
 
+  if (!iframeDocs.length) {
+    window.setTimeout(() => ensureStudioTailwindCanvas(editor), 200);
+    return;
+  }
+
   iframeDocs.forEach((iframeDoc) => {
     if (!iframeDoc.head) {
       return;
@@ -1245,18 +1873,19 @@ function getStudioCanvasDocuments(editor: any) {
     docs.add(canvasDoc);
   }
 
-  document
-    .querySelectorAll<HTMLIFrameElement>(".gs-studio-root iframe, .gjs-frame, iframe")
-    .forEach((iframe) => {
+  const root = document.querySelector<HTMLDivElement>('[data-studio-root="true"]');
+  if (root) {
+    root.querySelectorAll<HTMLIFrameElement>("iframe").forEach((iframe) => {
       try {
         const iframeDoc = iframe.contentDocument;
-        if (iframeDoc) {
+        if (iframeDoc && iframeDoc !== canvasDoc) {
           docs.add(iframeDoc);
         }
       } catch {
         // Cross-origin iframes are ignored; Studio canvas iframes are same-origin.
       }
     });
+  }
 
   return Array.from(docs);
 }
@@ -1362,32 +1991,75 @@ async function loadStudioTemplates(): Promise<StudioTemplate[]> {
       : [];
 
   return [
-    ...localItems.map((item: any) => ({
-      id: item.id,
-      name: item.name,
-      media: item.thumbnailUrl ?? item.previewUrl ?? undefined,
-      source: "local" as const,
-      data:
-        item.grapesJson && typeof item.grapesJson === "object"
-          ? item.grapesJson
-          : {
-              pages: [
-                {
-                  name: item.name ?? "Template",
-                  component: item.baseHtml || defaultLandingMarkup
-                }
-              ]
-            }
-    })),
-    ...platformItems.map((item: any) => ({
-      id: item.id,
-      name: item.name,
-      media: item.media ?? undefined,
-      source: "platform" as const,
-      data: null
-    }))
+    ...localItems.map((item: any, index: number) => {
+      const media = resolveTemplatePreviewUrl(item.thumbnailUrl ?? item.previewUrl);
+
+      return {
+        id: resolveStudioTemplateId(item, index),
+        name: item.name ?? `Template ${index + 1}`,
+        ...(media ? { media } : {}),
+        source: "local" as const,
+        data:
+          item.grapesJson && typeof item.grapesJson === "object"
+            ? item.grapesJson
+            : {
+                pages: [
+                  {
+                    name: item.name ?? "Template",
+                    component: item.baseHtml || defaultLandingMarkup
+                  }
+                ]
+              }
+      };
+    }),
+    ...platformItems.map((item: any, index: number) => {
+      const media = resolveTemplatePreviewUrl(item.media);
+
+      return {
+        id: resolveStudioTemplateId(item, index),
+        name: item.name ?? `Template ${index + 1}`,
+        ...(media ? { media } : {}),
+        source: "platform" as const,
+        data: null
+      };
+    })
   ];
 }
+
+function mapAssetType(type: string | undefined, mimeType: string | undefined) {
+  if (type === "VIDEO" || mimeType?.startsWith("video/")) {
+    return "video";
+  }
+
+  if (type === "DOCUMENT") {
+    return "document";
+  }
+
+  return "image";
+}
+
+function normalizeStudioAssets(items: any[]): StudioAsset[] {
+  return items
+    .map((item): StudioAsset | null => {
+      const src = resolveAssetSrc(item);
+      if (!src) {
+        return null;
+      }
+
+      return {
+        id: item.id,
+        src,
+        name: item.originalName,
+        mimeType: item.mimeType,
+        size: item.size,
+        type: mapAssetType(item.type, item.mimeType)
+      };
+    })
+    .filter((item): item is StudioAsset => item !== null);
+}
+
+let studioSharedAssetsPromise: Promise<StudioAsset[]> | null = null;
+let studioSharedAssetsCache: StudioAsset[] | null = null;
 
 async function loadStudioAssets(): Promise<StudioAsset[]> {
   if (studioSharedAssetsCache) {
@@ -1424,7 +2096,6 @@ async function loadStudioAssets(): Promise<StudioAsset[]> {
       studioSharedAssetsCache = fallbackNormalized;
       return fallbackNormalized;
     } catch (error) {
-      // Backward-compatible fallback for environments still using /assets.
       try {
         const response = await apiClient.get("/assets", { params: assetsParams });
         const items = Array.isArray(response.data?.items) ? response.data.items : [];
@@ -1442,38 +2113,6 @@ async function loadStudioAssets(): Promise<StudioAsset[]> {
   })();
 
   return studioSharedAssetsPromise;
-}
-
-function mapAssetType(type: string | undefined, mimeType: string | undefined) {
-  if (type === "VIDEO" || mimeType?.startsWith("video/")) {
-    return "video";
-  }
-
-  if (type === "DOCUMENT") {
-    return "document";
-  }
-
-  return "image";
-}
-
-function normalizeStudioAssets(items: any[]): StudioAsset[] {
-  return items
-    .map((item): StudioAsset | null => {
-      const src = resolveAssetSrc(item);
-      if (!src) {
-        return null;
-      }
-
-      return {
-        id: item.id,
-        src,
-        name: item.originalName,
-        mimeType: item.mimeType,
-        size: item.size,
-        type: mapAssetType(item.type, item.mimeType)
-      };
-    })
-    .filter((item): item is StudioAsset => item !== null);
 }
 
 function syncProjectAssetsInEditor(editor: any, assets: StudioAsset[]) {
@@ -1519,9 +2158,54 @@ function mergeStudioAssetLists(
   return mergedAssets;
 }
 
+function resolveTemplatePreviewUrl(value: unknown) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  const trimmed = value.trim();
+  if (isInvalidAssetUrl(trimmed)) {
+    return "";
+  }
+
+  return trimmed;
+}
+
+function resolveStudioTemplateId(item: { id?: unknown; name?: unknown }, index: number) {
+  if (typeof item.id === "string") {
+    const trimmed = item.id.trim();
+    if (trimmed && !isInvalidAssetUrl(trimmed)) {
+      return trimmed;
+    }
+  }
+
+  const name = typeof item.name === "string" ? item.name.trim() : "";
+  if (name) {
+    const slug = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    if (slug) {
+      return slug;
+    }
+  }
+
+  return `template-${index + 1}`;
+}
+
 function resolveAssetSrc(item: any) {
-  if (typeof item?.url === "string" && item.url.trim()) {
-    return item.url.trim();
+  if (typeof item?.url === "string") {
+    const url = item.url.trim();
+    if (!isInvalidAssetUrl(url)) {
+      return url;
+    }
+  }
+
+  if (typeof item?.src === "string") {
+    const src = item.src.trim();
+    if (!isInvalidAssetUrl(src)) {
+      return src;
+    }
   }
 
   if (typeof item?.id === "string" && item.id) {
@@ -1537,10 +2221,17 @@ async function resolveTemplateSelection(template: StudioTemplate) {
     return template;
   }
 
-  const response = await fetch(`/api/grapes/templates/${template.id}`, {
-    cache: "no-store",
-    credentials: "include"
-  });
+  if (!template.id || isInvalidAssetUrl(template.id)) {
+    throw new Error("Platform template id is missing");
+  }
+
+  const response = await fetch(
+    `/api/grapes/templates/${encodeURIComponent(template.id)}`,
+    {
+      cache: "no-store",
+      credentials: "include"
+    }
+  );
 
   if (!response.ok) {
     toast.error(

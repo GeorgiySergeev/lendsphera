@@ -258,8 +258,9 @@ function buildImportedLandingEditorProject(
   const bodyHtml =
     extractBodyInnerHtml(importedLanding.document.body) ||
     importedLanding.document.rawHtml;
+  const headStyles = buildImportedHeadStylesMarkup(importedLanding, rewriteOptions);
   const headScripts = buildImportedHeadScriptMarkup(importedLanding, rewriteOptions);
-  const componentMarkup = `${headScripts}${rewriteImportedAssetUrls(
+  const componentMarkup = `${headStyles}${headScripts}${rewriteImportedAssetUrls(
     importedLanding,
     bodyHtml,
     importedLanding.entrypoint,
@@ -302,6 +303,29 @@ function buildImportedLandingAssetProxyUrl(
 
   // Same-origin relative URL so canvas images work on any dev host (localhost vs 127.0.0.1).
   return `/api/landings/${encodeURIComponent(landingId)}/assets/${encodedPath}?token=${token}`;
+}
+
+function buildImportedHeadStylesMarkup(
+  importedLanding: ImportedLanding,
+  options: ResolveImportedAssetUrlOptions
+) {
+  return importedLanding.document.linkedCss
+    .map((assetPath) => {
+      const resolved = resolveImportedAssetUrl(
+        importedLanding,
+        importedLanding.entrypoint,
+        assetPath,
+        options
+      );
+
+      if (!resolved) {
+        return "";
+      }
+
+      return `<link rel="stylesheet" href="${resolved}" data-landsphera-imported-stylesheet="true" />`;
+    })
+    .filter(Boolean)
+    .join("");
 }
 
 function buildImportedHeadScriptMarkup(
@@ -602,6 +626,70 @@ function isExternalReference(value: string) {
   return /^(?:data:|#|javascript:|mailto:|tel:)/i.test(value);
 }
 
+function normalizeProjectAssetUrls(
+  input: unknown,
+  importedLanding: ImportedLanding,
+  options?: ResolveImportedAssetUrlOptions
+): unknown {
+  if (typeof input === "string") {
+    return rewriteImportedAssetUrls(
+      importedLanding,
+      input,
+      importedLanding.entrypoint,
+      options
+    );
+  }
+
+  if (Array.isArray(input)) {
+    return input.map((item) => normalizeProjectAssetUrls(item, importedLanding, options));
+  }
+
+  if (!input || typeof input !== "object") {
+    return input;
+  }
+
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    if (
+      typeof value === "string" &&
+      (key.toLowerCase() === "src" ||
+        key.toLowerCase() === "href" ||
+        key.toLowerCase() === "poster")
+    ) {
+      result[key] =
+        resolveImportedAssetUrl(
+          importedLanding,
+          importedLanding.entrypoint,
+          value,
+          options
+        ) ?? value;
+      continue;
+    }
+
+    if (typeof value === "string" && /(css|style)$/i.test(key)) {
+      result[key] = rewriteImportedCssUrls(
+        importedLanding,
+        value,
+        importedLanding.entrypoint,
+        options
+      );
+      continue;
+    }
+
+    result[key] = normalizeProjectAssetUrls(value, importedLanding, options);
+  }
+
+  return result;
+}
+
+function isStudioProjectShape(value: unknown): value is { pages: unknown[] } {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    Array.isArray((value as { pages?: unknown[] }).pages)
+  );
+}
+
 export {
   buildImportedLandingAssetProxyUrl,
   buildImportedLandingEditorProject,
@@ -610,6 +698,8 @@ export {
   findImportedAssetByPath,
   getImportedLandingCssText,
   getImportedLandingHtmlSections,
+  isStudioProjectShape,
+  normalizeProjectAssetUrls,
   resolveImportedAssetUrl,
   rewriteImportedAssetUrls,
   rewriteImportedCssUrls

@@ -21,8 +21,11 @@ import { extractImportedCodeVariables } from "../zip-import/zip-import.parser";
 import {
   buildImportedLandingEditorProject,
   buildImportedLandingEditorStyles,
+  getImportedLandingCssText,
   extractImportedLanding,
   findImportedAssetByPath,
+  isStudioProjectShape,
+  normalizeProjectAssetUrls,
   rewriteImportedCssUrls
 } from "../zip-import/imported-landing.utils";
 import { createEditorAssetToken } from "./editor-asset-token";
@@ -195,6 +198,10 @@ export class LandingsService {
             landingId: id,
             userId: user.id
           });
+          const assetRewriteOptions = {
+            landingId: id,
+            assetToken: editorAssetToken
+          };
           const inlinedStyles = await buildImportedLandingEditorStyles(
             id,
             importedLanding,
@@ -202,82 +209,88 @@ export class LandingsService {
             (s3Key) => this.storage.getObjectBuffer(s3Key),
             v.css
           );
-          const studioProject = buildImportedLandingEditorProject(
-            id,
-            importedLanding,
-            editorAssetToken,
-            v.css,
-            inlinedStyles
-          );
-          doc.assets = studioProject.assets;
+          const savedStudioProject = isStudioProjectShape(grapesJson.components)
+            ? grapesJson.components
+            : null;
+          type StudioEditorPage = { styles?: string };
+          type StudioEditorProject = {
+            assets?: unknown;
+            pages?: StudioEditorPage[];
+          };
+          const studioProject: StudioEditorProject = savedStudioProject
+            ? (normalizeProjectAssetUrls(
+                savedStudioProject,
+                importedLanding,
+                assetRewriteOptions
+              ) as StudioEditorProject)
+            : buildImportedLandingEditorProject(
+                id,
+                importedLanding,
+                editorAssetToken,
+                v.css,
+                inlinedStyles
+              );
+          const firstStudioPage = studioProject.pages?.[0];
+          const savedPageStyles =
+            typeof firstStudioPage?.styles === "string" ? firstStudioPage.styles : "";
+          let resolvedEditorStyles =
+            savedPageStyles.trim() && !savedPageStyles.includes("@import url(")
+              ? savedPageStyles
+              : inlinedStyles;
+          if (!resolvedEditorStyles.trim()) {
+            resolvedEditorStyles = getImportedLandingCssText(
+              importedLanding,
+              v.css,
+              assetRewriteOptions
+            );
+          }
+          if (firstStudioPage && resolvedEditorStyles.trim()) {
+            studioProject.pages = [
+              { ...firstStudioPage, styles: resolvedEditorStyles },
+              ...(studioProject.pages?.slice(1) ?? [])
+            ];
+          }
+          doc.assets = studioProject.assets ?? grapesJson.assets;
           doc.components = studioProject;
           doc.editorAssetToken = editorAssetToken;
           doc.importedVariables = importedVariables;
-          doc.styles = inlinedStyles;
-          doc.layout = undefined;
-          // #region agent log
-          const componentText = JSON.stringify(studioProject.pages?.[0] ?? {});
-          const stylesText = String(studioProject.pages?.[0]?.styles ?? "");
-          fetch("http://127.0.0.1:7285/ingest/96a37387-d690-48d0-ba19-eb148c34d87e", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Debug-Session-Id": "3eb14a"
-            },
-            body: JSON.stringify({
-              sessionId: "3eb14a",
-              runId: "post-fix",
-              hypothesisId: "H7",
-              location: "landings.service.ts:editor",
-              message: "editor project built with inlined CSS",
-              data: {
-                landingId: id,
-                linkedCssCount: importedLanding.document.linkedCss.length,
-                stylesLength: stylesText.length,
-                stylesImportCount: (stylesText.match(/@import/g) ?? []).length,
-                stylesProxyCount: (
-                  stylesText.match(/\/api\/landings\/[^"'\s]+\/assets\//g) ?? []
-                ).length,
-                relativeJsSrcCount: (componentText.match(/src=["']js\//g) ?? []).length
-              },
-              timestamp: Date.now()
-            })
-          }).catch(() => {});
-          // #endregion
+          doc.styles = resolvedEditorStyles;
+          doc.layout = savedStudioProject ? grapesJson.layout : undefined;
         } else {
+          const importedLandingSnapshot = await this.resolveImportedLandingSnapshot(id);
+          let components = grapesJson.components;
+          let styles = grapesJson.styles;
+
+          if (importedLandingSnapshot) {
+            const editorAssetToken = createEditorAssetToken({
+              landingId: id,
+              userId: user.id
+            });
+            const assetRewriteOptions = {
+              landingId: id,
+              assetToken: editorAssetToken
+            };
+
+            components = normalizeProjectAssetUrls(
+              components,
+              importedLandingSnapshot,
+              assetRewriteOptions
+            );
+            if (typeof styles === "string") {
+              styles = rewriteImportedCssUrls(
+                importedLandingSnapshot,
+                styles,
+                importedLandingSnapshot.entrypoint,
+                assetRewriteOptions
+              );
+            }
+            doc.editorAssetToken = editorAssetToken;
+          }
+
           doc.assets = grapesJson.assets;
-          doc.components = grapesJson.components;
+          doc.components = components;
           doc.layout = grapesJson.layout;
-          doc.styles = grapesJson.styles;
-          // #region agent log
-          const fallbackText = JSON.stringify(grapesJson.components ?? {});
-          fetch("http://127.0.0.1:7285/ingest/96a37387-d690-48d0-ba19-eb148c34d87e", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Debug-Session-Id": "3eb14a"
-            },
-            body: JSON.stringify({
-              sessionId: "3eb14a",
-              runId: "pre-fix",
-              hypothesisId: "H1",
-              location: "landings.service.ts:editor",
-              message: "editor using saved grapesJson components fallback",
-              data: {
-                landingId: id,
-                usedImportedLanding: false,
-                relativeJsSrcCount: (fallbackText.match(/src=["']js\//g) ?? []).length,
-                relativeImgSrcCount: (fallbackText.match(/src=["']images\//g) ?? [])
-                  .length,
-                hasFrames: Boolean(
-                  (grapesJson.components as { pages?: Array<{ frames?: unknown[] }> })
-                    ?.pages?.[0]?.frames?.length
-                )
-              },
-              timestamp: Date.now()
-            })
-          }).catch(() => {});
-          // #endregion
+          doc.styles = styles;
         }
       }
     }
