@@ -8,7 +8,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { createEditorAssetToken } from "../landings/editor-asset-token";
 import {
   extractImportedLanding,
-  resolveImportedAssetUrl,
+  normalizeProjectAssetUrls,
   rewriteImportedAssetUrls,
   rewriteImportedCssUrls
 } from "../zip-import/imported-landing.utils";
@@ -153,33 +153,6 @@ export class VersionsService {
             )
           : dto.components;
 
-        // #region agent log
-        const normalizedText = JSON.stringify(normalizedComponents ?? {});
-        fetch("http://127.0.0.1:7285/ingest/96a37387-d690-48d0-ba19-eb148c34d87e", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Debug-Session-Id": "3eb14a"
-          },
-          body: JSON.stringify({
-            sessionId: "3eb14a",
-            runId: "pre-fix",
-            hypothesisId: "H5",
-            location: "versions.service.ts:saveDraft",
-            message: "draft save normalized components",
-            data: {
-              landingId,
-              hasImportedLanding: Boolean(importedLanding),
-              relativeJsSrcCount: (normalizedText.match(/src=["']js\//g) ?? []).length,
-              relativeImgSrcCount: (normalizedText.match(/src=["']images\//g) ?? [])
-                .length,
-              s3UrlCount: (normalizedText.match(/localhost:9000/g) ?? []).length
-            },
-            timestamp: Date.now()
-          })
-        }).catch(() => {});
-        // #endregion
-
         const grapesJson = {
           assets: dto.assets,
           components: normalizedComponents,
@@ -321,60 +294,4 @@ export class VersionsService {
 
     return result;
   }
-}
-
-function normalizeProjectAssetUrls(
-  input: unknown,
-  importedLanding: any,
-  options?: { assetToken: string; landingId: string }
-): unknown {
-  if (typeof input === "string") {
-    return rewriteImportedAssetUrls(
-      importedLanding,
-      input,
-      importedLanding.entrypoint,
-      options
-    );
-  }
-
-  if (Array.isArray(input)) {
-    return input.map((item) => normalizeProjectAssetUrls(item, importedLanding, options));
-  }
-
-  if (!input || typeof input !== "object") {
-    return input;
-  }
-
-  const result: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-    if (
-      typeof value === "string" &&
-      (key.toLowerCase() === "src" ||
-        key.toLowerCase() === "href" ||
-        key.toLowerCase() === "poster")
-    ) {
-      result[key] =
-        resolveImportedAssetUrl(
-          importedLanding,
-          importedLanding.entrypoint,
-          value,
-          options
-        ) ?? value;
-      continue;
-    }
-
-    if (typeof value === "string" && /(css|style)$/i.test(key)) {
-      result[key] = rewriteImportedCssUrls(
-        importedLanding,
-        value,
-        importedLanding.entrypoint,
-        options
-      );
-      continue;
-    }
-
-    result[key] = normalizeProjectAssetUrls(value, importedLanding, options);
-  }
-
-  return result;
 }

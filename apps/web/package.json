@@ -45,6 +45,7 @@
     "grapesjs-preset-webpage": "^1.0.3",
     "js-beautify": "^1.15.4",
     "jsondiffpatch": "^0.7.6",
+    "jszip": "^3.10.1",
     "lucide-react": "^0.552.0",
     "monaco-editor": "^0.55.1",
     "monaco-tailwindcss": "^0.6.1",
@@ -65,6 +66,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17",
     "@types/js-beautify": "^1.14.3",
+    "@types/jszip": "^3.4.1",
     "@types/papaparse": "^5.5.2",
     "tailwindcss": "^4.1.17"
   }

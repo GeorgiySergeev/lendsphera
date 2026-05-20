@@ -71,7 +71,11 @@ export function formatFileSize(bytes: number): string {
 }
 
 export function getAssetThumbnailUrl(asset: MediaAsset): string | null {
-  return asset.type === "IMAGE" ? asset.url : null;
+  if (asset.type !== "IMAGE") return null;
+  if (typeof asset.url !== "string") return null;
+  const trimmed = asset.url.trim();
+  if (!trimmed || trimmed === "undefined" || trimmed === "null") return null;
+  return asset.url;
 }
 
 function cleanParams<T extends Record<string, unknown>>(

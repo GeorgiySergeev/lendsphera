@@ -37,21 +37,14 @@ import { ZipImportModule } from "./zip-import/zip-import.module";
 
 @Module({
   imports: [
+    // Only register the global bucket here. In @nestjs/throttler v6 every
+    // throttler in forRoot is enforced on all routes; named auth/password-reset
+    // limits belong on their handlers via @Throttle() (see auth.controller.ts).
     ThrottlerModule.forRoot([
       {
-        name: "global",
-        ttl: seconds(process.env.NODE_ENV === "production" ? 60 : 1000),
-        limit: process.env.NODE_ENV === "production" ? 100 : 10000
-      },
-      {
-        name: "auth",
-        ttl: seconds(60),
-        limit: process.env.NODE_ENV === "production" ? 5 : 100
-      },
-      {
-        name: "password-reset",
-        ttl: seconds(3600),
-        limit: process.env.NODE_ENV === "production" ? 3 : 100
+        name: "default",
+        ttl: seconds(process.env.NODE_ENV === "production" ? 60 : 60),
+        limit: process.env.NODE_ENV === "production" ? 100 : 1000
       }
     ]),
     BullModule.forRoot({

@@ -6,7 +6,7 @@ import {
   Req,
   Res,
   UnauthorizedException,
-  UseGuards,
+  UseGuards
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
@@ -48,7 +48,7 @@ function refreshCookieOptions(): {
     httpOnly: true,
     secure: env.NODE_ENV === "production",
     sameSite: "lax",
-    path: "/",
+    path: "/"
   };
 }
 
@@ -59,20 +59,25 @@ export class AuthController {
 
   // ──────────── REGISTER ────────────
   @Post("register")
-  @Throttle({ auth: { limit: 5, ttl: 60000 } })
+  @Throttle({
+    default: {
+      limit: process.env.NODE_ENV === "production" ? 5 : 100,
+      ttl: 60000
+    }
+  })
   async register(
     @Body() dto: RegisterDto,
     @Req() request: Request,
-    @Res({ passthrough: true }) response: Response,
+    @Res({ passthrough: true }) response: Response
   ) {
     const { user, accessToken, refreshToken } = await this.auth.register(
       dto,
-      this.getMeta(request),
+      this.getMeta(request)
     );
 
     response.cookie(REFRESH_TOKEN_COOKIE, refreshToken, {
       ...refreshCookieOptions(),
-      maxAge: REFRESH_COOKIE_MAX_AGE_MS,
+      maxAge: REFRESH_COOKIE_MAX_AGE_MS
     });
 
     return { accessToken, user };
@@ -80,22 +85,27 @@ export class AuthController {
 
   // ──────────── LOGIN ────────────
   @Post("login")
-  @Throttle({ auth: { limit: 5, ttl: 60000 } })
+  @Throttle({
+    default: {
+      limit: process.env.NODE_ENV === "production" ? 5 : 100,
+      ttl: 60000
+    }
+  })
   async login(
     @Body() dto: LoginDto,
     @Req() request: Request,
-    @Res({ passthrough: true }) response: Response,
+    @Res({ passthrough: true }) response: Response
   ) {
     const { user, accessToken, refreshToken } = await this.auth.login(
       dto.email,
       dto.password,
-      this.getMeta(request),
+      this.getMeta(request)
     );
 
     // Set refresh token in HttpOnly cookie — inaccessible to JavaScript
     response.cookie(REFRESH_TOKEN_COOKIE, refreshToken, {
       ...refreshCookieOptions(),
-      maxAge: REFRESH_COOKIE_MAX_AGE_MS,
+      maxAge: REFRESH_COOKIE_MAX_AGE_MS
     });
 
     // Access token returned in body (short-lived — 15 min)
@@ -104,10 +114,7 @@ export class AuthController {
 
   // ──────────── REFRESH ────────────
   @Post("refresh")
-  async refresh(
-    @Req() request: Request,
-    @Res({ passthrough: true }) response: Response,
-  ) {
+  async refresh(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
     // Read refresh token from HttpOnly cookie (auto-parsed by cookie-parser)
     const oldRefreshToken = (request.cookies as Record<string, string>)?.[
       REFRESH_TOKEN_COOKIE
@@ -117,13 +124,15 @@ export class AuthController {
       throw new UnauthorizedException("Refresh token not found in cookies");
     }
 
-    const { accessToken, refreshToken: newRefreshToken } =
-      await this.auth.refresh(oldRefreshToken, this.getMeta(request));
+    const { accessToken, refreshToken: newRefreshToken } = await this.auth.refresh(
+      oldRefreshToken,
+      this.getMeta(request)
+    );
 
     // Rotate refresh token cookie
     response.cookie(REFRESH_TOKEN_COOKIE, newRefreshToken, {
       ...refreshCookieOptions(),
-      maxAge: REFRESH_COOKIE_MAX_AGE_MS,
+      maxAge: REFRESH_COOKIE_MAX_AGE_MS
     });
 
     // Only access token in the body — refresh token lives in the cookie
@@ -135,10 +144,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @CustomThrottle.Skip()
   @Post("logout")
-  async logout(
-    @Req() request: Request,
-    @Res({ passthrough: true }) response: Response,
-  ) {
+  async logout(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
     const refreshToken = (request.cookies as Record<string, string>)?.[
       REFRESH_TOKEN_COOKIE
     ];
@@ -170,19 +176,16 @@ export class AuthController {
 
   @Get("google/callback")
   @UseGuards(AuthGuard("google"))
-  async googleCallback(
-    @Req() request: Request,
-    @Res() response: Response,
-  ) {
+  async googleCallback(@Req() request: Request, @Res() response: Response) {
     const user = request.user as User;
     const { accessToken, refreshToken } = await this.auth.issueTokenPair(
       user,
-      this.getMeta(request),
+      this.getMeta(request)
     );
 
     response.cookie(REFRESH_TOKEN_COOKIE, refreshToken, {
       ...refreshCookieOptions(),
-      maxAge: REFRESH_COOKIE_MAX_AGE_MS,
+      maxAge: REFRESH_COOKIE_MAX_AGE_MS
     });
 
     const redirect = new URL(env.GOOGLE_OAUTH_SUCCESS_REDIRECT!);
@@ -194,7 +197,7 @@ export class AuthController {
   private getMeta(request: Request) {
     return {
       userAgent: request.headers["user-agent"],
-      ip: request.ip,
+      ip: request.ip
     };
   }
 }

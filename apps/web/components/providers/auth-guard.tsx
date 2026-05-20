@@ -64,6 +64,13 @@ function AuthGuard({ children }: AuthGuardProps) {
       }
       return;
     }
+    if (!user) {
+      const query = typeof window !== "undefined" ? window.location.search : "";
+      const next =
+        pathname && pathname !== "/login" ? `${pathname}${query}` : "/dashboard";
+      router.replace(`/login?next=${encodeURIComponent(next)}`);
+      return;
+    }
     if (restoreInFlightRef.current || hasAttemptedRestoreRef.current) return;
 
     let cancelled = false;
